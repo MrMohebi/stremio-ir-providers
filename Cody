@@ -1,0 +1,10 @@
+git clone https://github.com/MrMohebi/stremio-ir-providers.git
+cd stremio-ir-providers
+const addons = [
+  'https://sip.m17i.xyz/manifest.json',
+  'https://cody.oliver-stone.net/manifest.json'
+];
+docker-compose up --build
+git add .
+git commit -m "Added Cody.oliver-stone.net addon"
+git push origin master
