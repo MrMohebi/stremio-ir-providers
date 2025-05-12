@@ -40,7 +40,7 @@ Both methods achieve the same result. We will cover both for the Stremio Web ver
         * On the Addons page, find the field labeled "Addon Repository" or "Install from URL" (usually near the top search bar).
         * Paste the exact following URL into that field:
             ```
-            [https://sip.m17i.xyz/manifest.json](https://sip.m17i.xyz/manifest.json)
+            https://sip.m17i.xyz/manifest.json
             ```
         * Press Enter or click the accompanying install/submit button. **"Iran Provider"** should appear, ready to be installed.
 5.  **Install:** Whether you found it via search (Method A) or URL (Method B), click the **"Install"** button next to **"Iran Provider"**.
