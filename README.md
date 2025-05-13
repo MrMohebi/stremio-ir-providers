@@ -3,6 +3,8 @@ A plugin for Stremio to stream movies and series from Iranian providers like 30n
 
 Also, you can share one account for multiple users without any trouble :)
 
+###### **Update:** We now support Iranian movies and series through PeepboxTV :)
+
 ## Install:
 - fallow this [install guide - English](docs/INSTALL.md)
 - or for Persian version fallow [آموزش نصب فارسی](docs/INSTALL-fa.md)
