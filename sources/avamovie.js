@@ -18,6 +18,9 @@ export default class Avamovie extends Source{
             const res = await Axios.request({
                 url: `https://${this.baseURL}/api-url/app/1/user_info`,
                 method: "post",
+                maxRedirects: 0,
+                validateStatus: (status) =>
+                    status >= 200 && status < 400,
                 data:{
                     token:this.token,
                     user_id:this.userId
@@ -46,6 +49,9 @@ export default class Avamovie extends Source{
             const res = await Axios.request({
                 url: `https://${this.baseURL}/api-url/app/1/login`,
                 method: "post",
+                maxRedirects: 0,
+                validateStatus: (status) =>
+                    status >= 200 && status < 400,
                 data:{
                     username:this.username,
                     password:this.password
@@ -198,7 +204,7 @@ export default class Avamovie extends Source{
             }
         }catch (e) {
             this.logger.debug(`error with => Avamovie, ${movieData}, ${imdbId}`)
-            this.logger.error(e)
+            this.logger.error(e.message)
         }
 
 
@@ -216,7 +222,7 @@ export default class Avamovie extends Source{
 
     }
 
-    imdbID(movieData){
+    async imdbID(movieData){
         return movieData.imdb
     }
 }
