@@ -27,6 +27,7 @@ addon.use(errorHandler);
 // avamovie
 const AvamovieProvider = new Avamovie(process.env.AVAMOVIE_BASEURL, logger)
 const PeepboxtvProvider = new Peepboxtv(process.env.PEEPBOXTV_BASEURL, logger)
+
 AvamovieProvider.login().then()
 
 
