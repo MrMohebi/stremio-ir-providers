@@ -198,7 +198,7 @@ export default class Avamovie extends Source{
             }
         }catch (e) {
             this.logger.debug(`error with => Avamovie, ${movieData}, ${imdbId}`)
-            this.logger.error(e)
+            this.logger.error(e.message)
         }
 
 
@@ -216,7 +216,7 @@ export default class Avamovie extends Source{
 
     }
 
-    imdbID(movieData){
+    async imdbID(movieData){
         return movieData.imdb
     }
 }

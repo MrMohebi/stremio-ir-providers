@@ -14,5 +14,5 @@ export default class Source {
     getMovieLinks(movieData){}
     getSeriesLinks(movieData, imdbId){}
     getLinks(type, imdbId, movieData){}
-    imdbID(type, id){}
+    async imdbID(type, id){}
 }

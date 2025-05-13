@@ -23,5 +23,6 @@ The other default settings are sufficient for basic usage and should work withou
 ## Supported provides:
 
 - [x] [Avamovie](https://avamovie.shop)
+- [x] [peepboxtv](https://peepboxtv.me)
 - [ ] [30nama](https://30nama.com)
 - [ ] [Download day](https://download-day.com/)

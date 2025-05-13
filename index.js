@@ -6,6 +6,7 @@ import Avamovie from "./sources/avamovie.js";
 import {getCinemeta, getSubtitle, modifyUrls} from "./utils.js";
 import Source from "./sources/source.js";
 import {errorHandler} from "./errorMiddleware.js";
+import Peepboxtv from "./sources/peepboxtv.js";
 
 
 const logger = winston.createLogger({
@@ -25,6 +26,7 @@ addon.use(errorHandler);
 // ------------- init providers ------------- :
 // avamovie
 const AvamovieProvider = new Avamovie(process.env.AVAMOVIE_BASEURL, logger)
+const PeepboxtvProvider = new Peepboxtv(process.env.PEEPBOXTV_BASEURL, logger)
 AvamovieProvider.login().then()
 
 
@@ -32,7 +34,7 @@ const ADDON_PREFIX = "ip"
 
 const MANIFEST = {
     id: 'org.mmmohebi.stremioIrProviders',
-    version: '1.1.0',
+    version: '2.1.0',
     contactEmail: "mmmohebi@outlook.com",
     description:"stream movies and series from Iranian providers like 30nama or avamovie. Source: https://github.com/MrMohebi/stremio-ir-providers",
     logo:"https://raw.githubusercontent.com/MrMohebi/stremio-ir-providers/refs/heads/master/logo.png",
@@ -54,6 +56,28 @@ const MANIFEST = {
             name: "AvaMovie" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
             type: "series",
             id: "avamovie_series",
+            extra: [
+                {
+                    name: "search",
+                    isRequired: true
+                },
+            ]
+        },
+        {
+            name: "PeepBoxTv" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
+            type: "movie",
+            id: "peepboxtv_movies",
+            extra: [
+                {
+                    name: "search",
+                    isRequired: true
+                },
+            ]
+        },
+        {
+            name: "PeepBoxTv" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
+            type: "series",
+            id: "peepboxtv_series",
             extra: [
                 {
                     name: "search",
@@ -87,6 +111,7 @@ addon.get('/manifest.json', function (req, res) {
     res.send(MANIFEST)
 });
 
+// search
 addon.get('/catalog/:type/:id/:extraArgs.json', async function (req, res, next) {
     try {
         const args = {
@@ -113,6 +138,15 @@ addon.get('/catalog/:type/:id/:extraArgs.json', async function (req, res, next) 
             }
         }
 
+        // peepboxtv provider
+        if (req.params.id.includes('peepboxtv')) {
+            data = await PeepboxtvProvider.search(args.search)
+            // append Provider ID prefix
+            for (let i = 0; i < data.length; i++) {
+                data[i].id = PeepboxtvProvider.providerID + data[i].id
+            }
+        }
+
         data = data.filter(i => i.type === req.params.type)
 
         // append addon prefix
@@ -131,11 +165,15 @@ addon.get('/catalog/:type/:id/:extraArgs.json', async function (req, res, next) 
     }
 });
 
+
+// get movie or series data
 addon.get('/meta/:type/:id.json', async function (req, res, next) {
     try {
         let imdbId = ""
 
         let providerPrefix = ""
+
+        let meta = {}
 
         const providerMovieId = req.params.id.split((new Source).idSeparator)[1]
 
@@ -148,7 +186,16 @@ addon.get('/meta/:type/:id.json', async function (req, res, next) {
             }
         }
 
-        let meta = {}
+        // peepboxtv Provider
+        if (req.params.id.includes('peepboxtv')) {
+            providerPrefix = PeepboxtvProvider.providerID
+            const movieData = await PeepboxtvProvider.getMovieData(req.params.type, providerMovieId)
+
+            if (!!movieData) {
+                imdbId = await PeepboxtvProvider.imdbID(movieData)
+            }
+        }
+
         if (imdbId.length > 0) {
             meta = await getCinemeta(req.params.type, imdbId)
             if(process.env.PROXY_ENABLE === 'true' || process.env.PROXY_ENABLE === '1'){
@@ -193,6 +240,11 @@ addon.get('/stream/:type/:id.json', async function (req, res, next) {
         if (req.params.id.includes('avamovie')) {
             const movieData = await AvamovieProvider.getMovieData(req.params.type, providerMovieId)
             streams = AvamovieProvider.getLinks(req.params.type, imdbId, movieData)
+        }
+
+        if (req.params.id.includes('peepboxtv')) {
+            const movieData = await PeepboxtvProvider.getMovieData(req.params.type, providerMovieId)
+            streams = PeepboxtvProvider.getLinks(req.params.type, imdbId, movieData)
         }
 
         return res.send({streams})
