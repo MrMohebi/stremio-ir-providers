@@ -183,7 +183,7 @@ addon.get('/meta/:type/:id.json', async function (req, res, next) {
             providerPrefix = AvamovieProvider.providerID
             const movieData = await AvamovieProvider.getMovieData(req.params.type, providerMovieId)
             if (!!movieData) {
-                imdbId = AvamovieProvider.imdbID(movieData)
+                imdbId = await AvamovieProvider.imdbID(movieData)
             }
         }
 
@@ -191,7 +191,6 @@ addon.get('/meta/:type/:id.json', async function (req, res, next) {
         if (req.params.id.includes('peepboxtv')) {
             providerPrefix = PeepboxtvProvider.providerID
             const movieData = await PeepboxtvProvider.getMovieData(req.params.type, providerMovieId)
-
             if (!!movieData) {
                 imdbId = await PeepboxtvProvider.imdbID(movieData)
             }
