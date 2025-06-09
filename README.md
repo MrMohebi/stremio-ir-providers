@@ -28,3 +28,9 @@ The other default settings are sufficient for basic usage and should work withou
 - [x] [peepboxtv](https://peepboxtv.me)
 - [ ] [30nama](https://30nama.com)
 - [ ] [Download day](https://download-day.com/)
+
+## To Do
+
+- [ ] Display movies and new items from providers on the index page
+- [ ] Integrate RPDB for posters
+- [ ] Fetch results from IR providers for movies and series on the index page
