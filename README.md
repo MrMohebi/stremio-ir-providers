@@ -26,6 +26,7 @@ The other default settings are sufficient for basic usage and should work withou
 
 - [x] [Avamovie](https://avamovie.shop)
 - [x] [peepboxtv](https://peepboxtv.me)
+- [ ] [filmju](https://filmju.com/)
 - [ ] [30nama](https://30nama.com)
 - [ ] [Download day](https://download-day.com/)
 
