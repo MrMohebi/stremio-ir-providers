@@ -35,7 +35,7 @@ const ADDON_PREFIX = "ip"
 
 const MANIFEST = {
     id: 'org.mmmohebi.stremioIrProviders',
-    version: '2.1.0',
+    version: '2.1.3',
     contactEmail: "mmmohebi@outlook.com",
     description:"stream movies and series from Iranian providers like 30nama or avamovie. Source: https://github.com/MrMohebi/stremio-ir-providers",
     logo:"https://raw.githubusercontent.com/MrMohebi/stremio-ir-providers/refs/heads/master/logo.png",

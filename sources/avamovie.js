@@ -1,5 +1,6 @@
 import Source from "./source.js";
 import Axios from "axios";
+import {randomInt, randomString} from "../utils.js";
 
 export default class Avamovie extends Source{
     username = process.env.AVAMOVIE_USERNAME
@@ -156,7 +157,7 @@ export default class Avamovie extends Source{
                 link.title += item.encoder + " - "
                 link.title += item.subtype
 
-                link.url = item.url
+                link.url = this.fixUrls(item.url)
 
                 links.push(link)
             }
@@ -171,7 +172,7 @@ export default class Avamovie extends Source{
                 link.title += item.size + " - "
                 link.title += item.encoder
 
-                link.url = item.url
+                link.url = this.fixUrls(item.url)
                 links.push(link)
             }
         }
@@ -198,7 +199,7 @@ export default class Avamovie extends Source{
                 link.title += item.quality + " - "
                 link.title += item.size + " - "
 
-                link.url = item?.episodes[episode - 1]?.url
+                link.url = this.fixUrls(item?.episodes[episode - 1]?.url)
 
                 links.push(link)
             }
@@ -224,5 +225,14 @@ export default class Avamovie extends Source{
 
     async imdbID(movieData){
         return movieData.imdb
+    }
+
+    // This will prevent Avamovie from detecting mass download.
+    fixUrls(urlString){
+        const url = new URL(urlString);
+        url.searchParams.set("uid", randomInt(100000,999999));
+        url.searchParams.set("md5", randomString(22));
+
+        return url.toString()
     }
 }

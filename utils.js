@@ -13,6 +13,21 @@ export function extractImdbId(url) {
     return match ? match[1] : null; // Returns the extracted ID or null if no match
 }
 
+export function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+
+export function randomString(length) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        const randomIndex = Math.floor(Math.random() * chars.length);
+        result += chars[randomIndex];
+    }
+    return result;
+}
+
 export async function getCinemeta(type, imdbId){
     try {
         const res = await Axios.request({
