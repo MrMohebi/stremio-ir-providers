@@ -1,6 +1,6 @@
 import Source from "./source.js";
 import Axios from "axios";
-import {searchAndGetTMDB} from "../utils.js";
+import {logAxiosError, searchAndGetTMDB} from "../utils.js";
 
 export default class Peepboxtv extends Source{
     userId = process.env.PEEPBOXTV_USER_ID
@@ -66,7 +66,7 @@ export default class Peepboxtv extends Source{
                 return items
             }
         }catch (e) {
-            this.logger.error("ERROR in getting list from PeepBoxTv", e)
+            logAxiosError(e, this.logger, "PeepBoxTv search error: ")
         }
 
         return []
@@ -94,7 +94,7 @@ export default class Peepboxtv extends Source{
                 return res.data;
             }
         }catch (e) {
-            this.logger.error(e)
+            logAxiosError(e, this.logger, "PeepBoxTv getMovieData error: ")
         }
 
         return null

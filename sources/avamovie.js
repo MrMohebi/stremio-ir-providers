@@ -1,6 +1,6 @@
 import Source from "./source.js";
 import Axios from "axios";
-import {randomInt, randomString} from "../utils.js";
+import {logAxiosError, randomInt, randomString} from "../utils.js";
 
 export default class Avamovie extends Source{
     username = process.env.AVAMOVIE_USERNAME
@@ -68,7 +68,7 @@ export default class Avamovie extends Source{
                 return true;
             }
         }catch (e) {
-            this.logger.error(e)
+            logAxiosError(e, this.logger, "Avamovie login error: ")
         }
         return false
     }
@@ -109,7 +109,7 @@ export default class Avamovie extends Source{
                 return items
             }
         }catch (e) {
-            this.logger.error("ERROR in getting list from avamovie", e)
+            logAxiosError(e, this.logger, "Avamovie search error: ")
         }
 
         return []
@@ -139,7 +139,7 @@ export default class Avamovie extends Source{
                 return res.data;
             }
         }catch (e) {
-            this.logger.error(e)
+            logAxiosError(e, this.logger, "Avamovie getMovieData error: ")
             this.login().then()
         }
 

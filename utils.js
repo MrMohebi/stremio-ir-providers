@@ -17,6 +17,22 @@ export function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+export function logAxiosError(error, logger= console, appendText = "") {
+    if (Axios.isAxiosError(error)) {
+        logger.error(appendText, 'Axios error message:', error.message);
+
+        if (error.response) {
+            logger.error('Status:', error.response.status);
+            logger.error('Response data:', error.response.data);
+        } else if (error.request) {
+            logger.error('No response received:', error.request);
+        } else {
+            logger.error('Error setting up request:', error.message);
+        }
+    } else {
+        logger.error(appendText, 'Unexpected error:', error);
+    }
+}
 
 export function randomString(length) {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
