@@ -1,3 +1,5 @@
+> ایشالا بعد اجیاری درستش میکنم ❤️.
+
 # Stremio IR Provide
 A plugin for Stremio to stream movies and series from Iranian providers like 30nama or avamovie. 
 
