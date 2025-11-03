@@ -2,11 +2,11 @@ import express from 'express'
 import cors from "cors"
 import winston from "winston"
 
-import Avamovie from "./sources/avamovie.js";
 import {getCinemeta, getSubtitle, modifyUrls} from "./utils.js";
 import Source from "./sources/source.js";
 import {errorHandler} from "./errorMiddleware.js";
 import Peepboxtv from "./sources/peepboxtv.js";
+import Digimovie from "./sources/digimovie.js";
 
 
 const logger = winston.createLogger({
@@ -24,28 +24,27 @@ addon.use(errorHandler);
 
 
 // ------------- init providers ------------- :
-// avamovie
-const AvamovieProvider = new Avamovie(process.env.AVAMOVIE_BASEURL, logger)
 const PeepboxtvProvider = new Peepboxtv(process.env.PEEPBOXTV_BASEURL, logger)
+const DigimovieProvider = new Digimovie(process.env.DIGIMOVIE_BASEURL, logger)
 
-AvamovieProvider.login().then()
+DigimovieProvider.login().then()
 
 
 const ADDON_PREFIX = "ip"
 
 const MANIFEST = {
     id: 'org.mmmohebi.stremioIrProviders',
-    version: '2.1.4',
+    version: '2.2.1',
     contactEmail: "mmmohebi@outlook.com",
-    description:"stream movies and series from Iranian providers like 30nama or avamovie. Source: https://github.com/MrMohebi/stremio-ir-providers",
+    description:"stream movies and series from Iranian providers like 30nama or digimovie. Source: https://github.com/MrMohebi/stremio-ir-providers",
     logo:"https://raw.githubusercontent.com/MrMohebi/stremio-ir-providers/refs/heads/master/logo.png",
     name: 'Iran Provider' + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
 
     catalogs: [
         {
-            name: "AvaMovie" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
+            name: "DigiMovie" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
             type: "movie",
-            id: "avamovie_movies",
+            id: "digimovie_movies",
             extra: [
                 {
                     name: "search",
@@ -54,9 +53,9 @@ const MANIFEST = {
             ]
         },
         {
-            name: "AvaMovie" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
+            name: "DigiMovie" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
             type: "series",
-            id: "avamovie_series",
+            id: "digimovie_series",
             extra: [
                 {
                     name: "search",
@@ -129,13 +128,12 @@ addon.get('/catalog/:type/:id/:extraArgs.json', async function (req, res, next) 
 
         let data = []
 
-        // avamovie Provider
-        if (req.params.id.includes('avamovie')) {
-            data = await AvamovieProvider.search(args.search)
-
+        // digimovie provider
+        if (req.params.id.includes('digimovie')) {
+            data = await DigimovieProvider.search(args.search)
             // append Provider ID prefix
             for (let i = 0; i < data.length; i++) {
-                data[i].id = AvamovieProvider.providerID + data[i].id
+                data[i].id = DigimovieProvider.providerID + data[i].id
             }
         }
 
@@ -178,12 +176,12 @@ addon.get('/meta/:type/:id.json', async function (req, res, next) {
 
         const providerMovieId = req.params.id.split((new Source).idSeparator)[1]
 
-        // avamovie Provider
-        if (req.params.id.includes('avamovie')) {
-            providerPrefix = AvamovieProvider.providerID
-            const movieData = await AvamovieProvider.getMovieData(req.params.type, providerMovieId)
+        // digimovie Provider
+        if (req.params.id.includes('digimovie')) {
+            providerPrefix = DigimovieProvider.providerID
+            const movieData = await DigimovieProvider.getMovieData(req.params.type, providerMovieId)
             if (!!movieData) {
-                imdbId = await AvamovieProvider.imdbID(movieData)
+                imdbId = await DigimovieProvider.imdbID(movieData)
             }
         }
 
@@ -237,9 +235,9 @@ addon.get('/stream/:type/:id.json', async function (req, res, next) {
 
         let streams = []
 
-        if (req.params.id.includes('avamovie')) {
-            const movieData = await AvamovieProvider.getMovieData(req.params.type, providerMovieId)
-            streams = AvamovieProvider.getLinks(req.params.type, imdbId, movieData)
+        if (req.params.id.includes('digimovie')) {
+            const movieData = await DigimovieProvider.getMovieData(req.params.type, providerMovieId)
+            streams = DigimovieProvider.getLinks(req.params.type, imdbId, movieData)
         }
 
         if (req.params.id.includes('peepboxtv')) {
