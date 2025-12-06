@@ -7,6 +7,7 @@ import Source from "./sources/source.js";
 import {errorHandler} from "./errorMiddleware.js";
 import Peepboxtv from "./sources/peepboxtv.js";
 import Digimovie from "./sources/digimovie.js";
+import Namakade from "./sources/namakade.js";
 
 
 const logger = winston.createLogger({
@@ -26,6 +27,7 @@ addon.use(errorHandler);
 // ------------- init providers ------------- :
 const PeepboxtvProvider = new Peepboxtv(process.env.PEEPBOXTV_BASEURL, logger)
 const DigimovieProvider = new Digimovie(process.env.DIGIMOVIE_BASEURL, logger)
+const NamakadeProvider = new Namakade(process.env.NAMAKADE_BASEURL || "namakade.com", logger)
 
 DigimovieProvider.login().then()
 
@@ -78,6 +80,17 @@ const MANIFEST = {
             name: "PeepBoxTv" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
             type: "series",
             id: "peepboxtv_series",
+            extra: [
+                {
+                    name: "search",
+                    isRequired: true
+                },
+            ]
+        },
+        {
+            name: "Namakade" + (process.env.DEV_MODE === 'true' ? " - DEV" : ""),
+            type: "movie",
+            id: "namakade_movies",
             extra: [
                 {
                     name: "search",
@@ -146,6 +159,15 @@ addon.get('/catalog/:type/:id/:extraArgs.json', async function (req, res, next) 
             }
         }
 
+        // namakade provider
+        if (req.params.id.includes('namakade')) {
+            data = await NamakadeProvider.search(args.search)
+            // append Provider ID prefix
+            for (let i = 0; i < data.length; i++) {
+                data[i].id = NamakadeProvider.providerID + data[i].id
+            }
+        }
+
         data = data.filter(i => i.type === req.params.type)
 
         // append addon prefix
@@ -191,6 +213,26 @@ addon.get('/meta/:type/:id.json', async function (req, res, next) {
             const movieData = await PeepboxtvProvider.getMovieData(req.params.type, providerMovieId)
             if (!!movieData) {
                 imdbId = await PeepboxtvProvider.imdbID(movieData)
+            }
+        }
+
+        // namakade Provider
+        if (req.params.id.includes('namakade')) {
+            const movieData = await NamakadeProvider.getMovieData(req.params.type, providerMovieId)
+            if (movieData) {
+                return res.send({
+                    meta: {
+                        id: req.params.id,
+                        type: "movie",
+                        name: movieData.title || "Unknown",
+                        poster: movieData.poster || "",
+                        background: movieData.poster || "",
+                        description: movieData.description || "",
+                        behaviorHints: {
+                            defaultVideoId: req.params.id
+                        }
+                    }
+                })
             }
         }
 
@@ -243,6 +285,11 @@ addon.get('/stream/:type/:id.json', async function (req, res, next) {
         if (req.params.id.includes('peepboxtv')) {
             const movieData = await PeepboxtvProvider.getMovieData(req.params.type, providerMovieId)
             streams = PeepboxtvProvider.getLinks(req.params.type, imdbId, movieData)
+        }
+
+        if (req.params.id.includes('namakade')) {
+            const movieData = await NamakadeProvider.getMovieData(req.params.type, providerMovieId)
+            streams = NamakadeProvider.getLinks(req.params.type, null, movieData)
         }
 
         return res.send({streams})
