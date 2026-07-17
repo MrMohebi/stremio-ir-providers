@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "stremio-ir-providers",
+  "main": "./cloudflare/index.js",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "vars": {
+    "LOG_LEVEL": "info",
+    "DEV_MODE": "false",
+    "PROXY_ENABLE": "true",
+    "PROXY_PATH": "proxy",
+    "PROXY_ALLOWED_URLS": "metahub.space,imdb.com,strem.io,tmdb.org"
+  }
+}

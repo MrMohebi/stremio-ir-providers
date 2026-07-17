@@ -10,7 +10,7 @@ import {ID_SEPARATOR, METADATA_SOURCE} from './sources/source.js'
 import {getCinemeta, getSubtitle, modifyUrls} from './utils.js'
 
 export const ADDON_PREFIX = 'ip'
-export const ADDON_VERSION = '2.3.0'
+export const ADDON_VERSION = '2.4.0'
 
 const CATALOGS = [
     {key: 'f2media', name: 'F2Media'},

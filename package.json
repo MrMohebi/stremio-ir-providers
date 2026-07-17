@@ -1,6 +1,6 @@
 {
   "name": "stremio-ir-providers",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "packageManager": "pnpm@11.11.0",
   "main": "index.js",
   "type": "module",
@@ -9,6 +9,9 @@
     "dev-proxy": "node --env-file=.env ./proxyServer.js",
     "start": "node ./index.js",
     "start-proxy": "node ./proxyServer.js",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy",
+    "worker:check": "wrangler deploy --dry-run",
     "test": "node --test",
     "check": "node --test && node --check index.js && node --check proxyServer.js"
   },
@@ -25,5 +28,8 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.112.0"
   }
 }
