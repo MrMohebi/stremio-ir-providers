@@ -23,7 +23,24 @@ Authenticate Wrangler once:
 pnpm wrangler login
 ```
 
-Store deployed credentials as encrypted Worker secrets. Set only the values required by the providers you enable:
+Store deployed configuration in `.dev.vars`. Every deploy reads the variable names and values from that file and uploads them as encrypted Worker secrets together with the Worker code:
+
+```sh
+pnpm worker:check
+pnpm worker:deploy
+```
+
+Both commands fail if `.dev.vars` is missing or malformed. `worker:check` performs a dry run, while `worker:deploy` updates the secrets and code atomically. Variables present in both `.dev.vars` and `wrangler.jsonc` use the local `.dev.vars` value for that deployment.
+
+To synchronize every non-empty value separately, run:
+
+```sh
+pnpm worker:secrets
+```
+
+The variable names are discovered from `.dev.vars`; the script has no hard-coded allowlist. You can preview the names without uploading their values with `pnpm worker:secrets -- --dry-run`.
+
+Alternatively, set each secret interactively:
 
 ```sh
 pnpm wrangler secret put TMDB_API_KEY
@@ -32,13 +49,6 @@ pnpm wrangler secret put PEEPBOXTV_BASEURL
 pnpm wrangler secret put PEEPBOXTV_USER_ID
 pnpm wrangler secret put PEEPBOXTV_ANDROID_ID
 pnpm wrangler secret put PEEPBOXTV_API_KEY
-```
-
-Then deploy:
-
-```sh
-pnpm worker:check
-pnpm worker:deploy
 ```
 
 The deployed manifest URL is `https://stremio-ir-providers.<your-subdomain>.workers.dev/manifest.json`, unless you attach a custom domain or rename the Worker in `wrangler.jsonc`.

@@ -10,8 +10,9 @@
     "start": "node ./index.js",
     "start-proxy": "node ./proxyServer.js",
     "worker:dev": "wrangler dev",
-    "worker:deploy": "wrangler deploy",
-    "worker:check": "wrangler deploy --dry-run",
+    "worker:secrets": "node ./scripts/upload-worker-secrets.js",
+    "worker:deploy": "wrangler deploy --secrets-file .dev.vars",
+    "worker:check": "wrangler deploy --dry-run --secrets-file .dev.vars",
     "test": "node --test",
     "check": "node --test && node --check index.js && node --check proxyServer.js"
   },

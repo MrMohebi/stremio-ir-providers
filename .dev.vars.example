@@ -1,4 +1,4 @@
-# Copy this file to .dev.vars for `pnpm worker:dev`.
+# Copy this file to .dev.vars for `pnpm worker:dev` and `pnpm worker:deploy`.
 TMDB_API_KEY=
 
 F2MEDIA_BASEURL=
