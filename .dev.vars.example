@@ -1,0 +1,16 @@
+# Copy this file to .dev.vars for `pnpm worker:dev`.
+TMDB_API_KEY=
+
+F2MEDIA_BASEURL=
+
+PEEPBOXTV_BASEURL=
+PEEPBOXTV_USER_ID=
+PEEPBOXTV_ANDROID_ID=
+PEEPBOXTV_API_KEY=
+
+# Set this to true to proxy metadata images through this same Worker.
+PROXY_ENABLE=false
+# Optional in Workers: defaults to the current Worker origin.
+PROXY_URL=
+PROXY_PATH=proxy
+PROXY_ALLOWED_URLS=metahub.space,imdb.com,strem.io,tmdb.org

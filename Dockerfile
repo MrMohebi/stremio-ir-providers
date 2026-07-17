@@ -4,7 +4,7 @@ LABEL org.opencontainers.image.source="https://github.com/MrMohebi/stremio-ir-pr
 ENV NODE_ENV=production
 WORKDIR /home/node/app
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable && pnpm install --frozen-lockfile --prod
 
 COPY --chown=node:node . .

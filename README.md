@@ -52,4 +52,15 @@ pnpm dev
 
 The addon listens on `http://127.0.0.1:7000` by default. Set `PORT` to override it.
 
+## Cloudflare Workers
+
+The addon and proxy can also run together in one Cloudflare Worker:
+
+```sh
+cp .dev.vars.example .dev.vars
+pnpm worker:dev
+```
+
+Use `pnpm worker:deploy` to publish it. See [Deploying to Cloudflare Workers](docs/CLOUDFLARE.md) for secrets, proxy configuration, local testing, and deployment details. The existing Node.js and Docker deployments remain unchanged.
+
 To integrate another streaming source, see [Adding a New Provider](docs/ADDING-A-PROVIDER.md).

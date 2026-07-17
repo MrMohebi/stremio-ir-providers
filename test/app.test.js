@@ -55,7 +55,7 @@ function createTestApp(provider = createProvider(), options = {}) {
 test('manifest keeps the public addon contract', () => {
     const manifest = createManifest({DEV_MODE: 'true'})
     assert.equal(manifest.id, 'org.mmmohebi.stremioIrProviders')
-    assert.equal(manifest.version, '2.3.0')
+    assert.equal(manifest.version, '2.4.0')
     assert.equal(manifest.name, 'Iran Provider - DEV')
     assert.deepEqual(manifest.catalogs.map((catalog) => catalog.id), [
         'f2media_movies',
