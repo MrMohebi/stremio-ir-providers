@@ -1,18 +1,61 @@
+export const ID_SEPARATOR = '___'
+
+export function normalizeBaseUrl(value, defaultProtocol = 'https:') {
+    const input = String(value ?? '').trim()
+    if (!input) {
+        return null
+    }
+
+    try {
+        const url = new URL(input.includes('://') ? input : `${defaultProtocol}//${input}`)
+        if (!['http:', 'https:'].includes(url.protocol)) {
+            return null
+        }
+        return url.toString().replace(/\/$/, '')
+    } catch {
+        return null
+    }
+}
 
 export default class Source {
-    idSeparator = "___"
-    constructor(baseURL, logger=console) {
-        this.baseURL = baseURL;
-        this.providerID = "NOT_SET" + this.idSeparator;
-        this.logger = logger
-    }
-    async login(){}
-    async isLogin(){}
+    idSeparator = ID_SEPARATOR
 
-    async search(text){}
-    async getMovieData(type, id){}
-    getMovieLinks(movieData){}
-    getSeriesLinks(movieData, imdbId){}
-    getLinks(type, imdbId, movieData){}
-    async imdbID(type, id){}
+    constructor(baseUrl, logger = console, httpClient = null, defaultProtocol = 'https:') {
+        this.baseUrl = normalizeBaseUrl(baseUrl, defaultProtocol)
+        this.baseURL = this.baseUrl
+        this.providerID = `NOT_SET${this.idSeparator}`
+        this.logger = logger
+        this.httpClient = httpClient
+    }
+
+    endpoint(path) {
+        if (!this.baseUrl) {
+            return null
+        }
+        return `${this.baseUrl}/${String(path).replace(/^\/+/, '')}`
+    }
+
+    async login() {
+        return false
+    }
+
+    async isLogin() {
+        return false
+    }
+
+    async search() {
+        return []
+    }
+
+    async getMovieData() {
+        return null
+    }
+
+    getLinks() {
+        return []
+    }
+
+    async imdbID() {
+        return null
+    }
 }

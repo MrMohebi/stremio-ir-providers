@@ -1,14 +1,15 @@
-FROM node:22.11.0-alpine3.20
+FROM node:22-alpine
 LABEL org.opencontainers.image.source="https://github.com/MrMohebi/stremio-ir-providers"
 
-RUN apk update && apk add curl
-
-WORKDIR /home/app
+ENV NODE_ENV=production
+WORKDIR /home/node/app
 
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-RUN npm install
+COPY --chown=node:node . .
 
-COPY . .
+USER node
+EXPOSE 7000 3005
 
-CMD [ "npm", "run", "start" ]
+CMD ["npm", "run", "start"]

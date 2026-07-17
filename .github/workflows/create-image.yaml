@@ -4,12 +4,16 @@ on:
   release:
     types: [ created ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   app-image:
       runs-on: ubuntu-latest
       steps:
         - name: 'Checkout GitHub Action'
-          uses: actions/checkout@main
+          uses: actions/checkout@v4
 
         - name: 'Login to GitHub Container Registry'
           uses: docker/login-action@v3
@@ -20,8 +24,7 @@ jobs:
 
         - name: 'Build Inventory Image'
           run: |
-            docker build . --build-arg VERSION_TO_GET=${{ github.ref_name }} --tag ghcr.io/mrmohebi/stremio-ir-providers:${{ github.ref_name }}
+            docker build . --tag ghcr.io/mrmohebi/stremio-ir-providers:${{ github.ref_name }}
             docker push ghcr.io/mrmohebi/stremio-ir-providers:${{ github.ref_name }}
             docker tag ghcr.io/mrmohebi/stremio-ir-providers:${{ github.ref_name }} ghcr.io/mrmohebi/stremio-ir-providers:latest
             docker push ghcr.io/mrmohebi/stremio-ir-providers:latest
-            
