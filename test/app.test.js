@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {createAddon, createManifest, parseAddonId} from '../app.js'
+import {METADATA_SOURCE} from '../sources/source.js'
 import {silentLogger, withServer} from '../test-support/helpers.js'
 
 function createProvider(overrides = {}) {
@@ -54,9 +55,14 @@ function createTestApp(provider = createProvider(), options = {}) {
 test('manifest keeps the public addon contract', () => {
     const manifest = createManifest({DEV_MODE: 'true'})
     assert.equal(manifest.id, 'org.mmmohebi.stremioIrProviders')
-    assert.equal(manifest.version, '2.2.1')
+    assert.equal(manifest.version, '2.3.0')
     assert.equal(manifest.name, 'Iran Provider - DEV')
-    assert.equal(manifest.catalogs.length, 4)
+    assert.deepEqual(manifest.catalogs.map((catalog) => catalog.id), [
+        'f2media_movies',
+        'f2media_series',
+        'peepboxtv_movies',
+        'peepboxtv_series',
+    ])
     assert.deepEqual(manifest.types, ['movie', 'series'])
 })
 
@@ -106,6 +112,38 @@ test('series metadata rewrites each video ID without mutating the provider ID', 
         const body = await response.json()
         assert.equal(body.meta.id, 'ipdigimovie___20')
         assert.equal(body.meta.videos[0].id, 'ipdigimovie___20___tt1234567:1:1')
+    })
+})
+
+test('provider metadata bypasses IMDb and Cinemeta while keeping stream IDs routable', async () => {
+    const provider = createProvider({
+        metadataSource: METADATA_SOURCE.PROVIDER,
+        getMeta(type, id) {
+            return {
+                id,
+                type,
+                name: 'Native series',
+                videos: [{id: `${id}:2:3`, season: 2, episode: 3}],
+            }
+        },
+        async imdbID() {
+            throw new Error('IMDb lookup must not run')
+        },
+    })
+    const app = createTestApp(provider, {
+        services: {
+            async getCinemeta() {
+                throw new Error('Cinemeta must not run')
+            },
+        },
+    })
+
+    await withServer(app, async (baseUrl) => {
+        const response = await fetch(`${baseUrl}/meta/series/ipdigimovie___20.json`)
+        const body = await response.json()
+        assert.equal(body.meta.name, 'Native series')
+        assert.equal(body.meta.id, 'ipdigimovie___20')
+        assert.equal(body.meta.videos[0].id, 'ipdigimovie___20___20:2:3')
     })
 })
 

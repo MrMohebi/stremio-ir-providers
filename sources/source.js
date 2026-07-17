@@ -1,4 +1,8 @@
 export const ID_SEPARATOR = '___'
+export const METADATA_SOURCE = Object.freeze({
+    CINEMETA: 'cinemeta',
+    PROVIDER: 'provider',
+})
 
 export function normalizeBaseUrl(value, defaultProtocol = 'https:') {
     const input = String(value ?? '').trim()
@@ -19,6 +23,7 @@ export function normalizeBaseUrl(value, defaultProtocol = 'https:') {
 
 export default class Source {
     idSeparator = ID_SEPARATOR
+    metadataSource = METADATA_SOURCE.CINEMETA
 
     constructor(baseUrl, logger = console, httpClient = null, defaultProtocol = 'https:') {
         this.baseUrl = normalizeBaseUrl(baseUrl, defaultProtocol)
@@ -48,6 +53,10 @@ export default class Source {
     }
 
     async getMovieData() {
+        return null
+    }
+
+    getMeta() {
         return null
     }
 

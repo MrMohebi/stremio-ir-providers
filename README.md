@@ -1,5 +1,3 @@
-> از اجباری برگشتم و دارم روش کار میکنم ❤️.
-
 # Stremio IR Provider
 A Stremio addon that finds movies and series on Iranian streaming providers.
 
@@ -28,6 +26,7 @@ The other default settings are sufficient for basic usage and should work withou
 ## Supported providers
 
 - [x] DigiMovie
+- [x] F2Media
 - [x] PeepBoxTV
 - [ ] [filmju](https://filmju.com/)
 - [ ] [30nama](https://30nama.com)
@@ -44,9 +43,11 @@ The other default settings are sufficient for basic usage and should work withou
 Copy `.env.example` to `.env`, fill in the provider credentials, then run:
 
 ```sh
-npm install
-npm test
-npm run dev
+nvm use
+corepack enable
+pnpm install
+pnpm test
+pnpm dev
 ```
 
 The addon listens on `http://127.0.0.1:7000` by default. Set `PORT` to override it.

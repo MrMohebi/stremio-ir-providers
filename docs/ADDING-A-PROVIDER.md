@@ -4,14 +4,14 @@ This guide explains what an upstream provider must expose and how to integrate i
 
 The examples use a fictional provider named `Example`. Replace its URLs and response fields with the real provider's API. Do not copy provider-specific credentials into source code or tests.
 
-Before starting, use Node.js 22 or newer, run `npm install`, and confirm the existing suite passes with `npm run check`. You should be comfortable with JavaScript classes, async functions, HTTP APIs, and dependency injection; no Stremio SDK knowledge is required.
+Before starting, use Node.js 24.18.0 or newer (`nvm use` selects the repository version), enable Corepack with `corepack enable`, run `pnpm install`, and confirm the existing suite passes with `pnpm check`. You should be comfortable with JavaScript classes, async functions, HTTP APIs, and dependency injection; no Stremio SDK knowledge is required.
 
 ## How a Provider Integration Works
 
 The addon translates between three different contracts:
 
 1. The provider API supplies search results, title details, and playable files.
-2. Cinemeta supplies Stremio-compatible metadata and episode IDs using an IMDb ID.
+2. Either Cinemeta or the provider supplies Stremio-compatible metadata and episode IDs.
 3. The provider class maps the selected Stremio movie or episode back to one or more playable provider URLs.
 
 The request flow is:
@@ -23,8 +23,8 @@ Stremio search
 
 Stremio opens a result
   -> provider.getMovieData(type, providerItemId)
-  -> provider.imdbID(movieData, type)
-  -> Cinemeta metadata
+  -> Cinemeta mode: provider.imdbID(...) -> Cinemeta metadata
+  -> Provider mode: provider.getMeta(...) -> native metadata
 
 Stremio requests streams
   -> provider.getMovieData(type, providerItemId)
@@ -34,7 +34,7 @@ Stremio requests streams
 
 The common HTTP routes and ID transformation live in [`app.js`](../app.js). Provider-specific behavior belongs in `sources/<provider>.js`.
 
-Cinemeta availability is required when Stremio opens a provider result. Providers supply identity and streams; they do not replace Cinemeta metadata in the current architecture.
+`Source` defaults to Cinemeta metadata. A provider whose detail response contains a title, description, artwork, and series episode structure can instead select provider metadata and avoid IMDb, TMDB, and Cinemeta entirely.
 
 `getMovieData()` is normally called once while building metadata and again when Stremio requests streams. The corresponding upstream endpoint should be safe to call repeatedly. If a provider has strict rate limits, add a small bounded cache with an expiry that is shorter than the lifetime of its signed stream URLs, and cover the cache behavior with tests.
 
@@ -48,7 +48,7 @@ A provider does not need to use a specific API format. Its responses only need t
 | Title details | Yes | The data needed to identify the title and locate its movie or series files |
 | Movie streams | For supported movies | One or more directly playable HTTP(S) URLs, with useful quality labels |
 | Series streams | For supported series | Seasons, episodes, and one or more directly playable HTTP(S) URLs for each episode |
-| IMDb mapping | Yes | Preferably an IMDb ID such as `tt0133093`; otherwise a reliable English title for TMDB lookup |
+| Metadata identity | Yes | Either an IMDb mapping for Cinemeta mode or enough native fields to build Stremio metadata in provider mode |
 | Authentication | Only if required | A documented login/token flow and the credentials required by protected endpoints |
 
 The provider API should ideally also have:
@@ -65,6 +65,14 @@ The current `search(text)` contract does not expose pagination or Stremio's `ski
 Provider item IDs are embedded in URL path segments. They should use a path-safe, reversible format and must not contain the addon's `___` separator. If an upstream ID can contain slashes, `___`, or other unsafe characters, encode it into a safe representation in `search()` and decode it inside `getMovieData()` before calling the provider API.
 
 This repository currently returns simple stream objects containing `url` and `title`. A provider that requires browser-only cookies, JavaScript challenges, DRM, or complex custom playback headers cannot be integrated by only adding a provider class. Supporting one would require a deliberate extension of the stream/proxy architecture and client testing.
+
+### HTML-Only Providers
+
+Providers without an API can extend [`HtmlSource`](../sources/html-source.js). It supplies timeout-limited HTML requests with browser-compatible headers, Cheerio document loading, same-origin page validation, and reversible base64url page-path IDs. Keep selectors, season naming rules, and stream extraction in the provider class because those details are website-specific.
+
+Use `pageId()` on same-origin detail links found during search, then use `decodePagePath()` before fetching a detail page. Validate decoded paths against the provider's actual movie and series URL shapes so a forged addon ID cannot turn the scraper into an arbitrary page fetcher. Parse all network responses inside `search()` or `getMovieData()`; `getLinks()` must remain a synchronous transformation of the parsed result.
+
+Prefer semantic markup such as canonical links, Open Graph metadata, IMDb links, direct download anchors, and season/episode labels. Do not scrape layout-only class names when a more stable attribute is available. Store small representative HTML fragments in tests rather than committing complete upstream pages, which are large and change frequently.
 
 ### Example Search Response
 
@@ -141,9 +149,11 @@ All providers extend `Source` from [`sources/source.js`](../sources/source.js).
 | --- | --- | --- |
 | `key` | Stable lowercase, delimiter-free slug | For example, `example` |
 | `providerID` | Provider portion of Stremio IDs | `` `${this.key}${this.idSeparator}` `` |
+| `metadataSource` | Select metadata strategy | `METADATA_SOURCE.CINEMETA` (default) or `METADATA_SOURCE.PROVIDER` |
 | `search(text)` | Search the provider | Array of catalog items; return `[]` on failure |
 | `getMovieData(type, id)` | Fetch provider details | Provider response object; return `null` on failure |
-| `imdbID(movieData, type)` | Resolve metadata identity | IMDb ID string or `null` |
+| `imdbID(movieData, type)` | Resolve Cinemeta identity | IMDb ID string or `null`; Cinemeta mode only |
+| `getMeta(type, id, movieData)` | Map native Stremio metadata | Meta object or `null`; provider mode only |
 | `getLinks(type, videoId, movieData)` | Synchronously dispatch movie/series link parsing | Array of stream objects, never a Promise |
 | `login()` | Authenticate if necessary | Boolean success value |
 | `isLogin()` | Validate an existing session if supported | Boolean login state |
@@ -163,10 +173,10 @@ Catalog/meta ID:
 ip<provider-key>___<provider-item-id>
 
 Movie stream ID:
-ip<provider-key>___<provider-item-id>___<imdb-id>
+ip<provider-key>___<provider-item-id>___<video-id>
 
 Series stream ID:
-ip<provider-key>___<provider-item-id>___<imdb-id>:<season>:<episode>
+ip<provider-key>___<provider-item-id>___<video-id>:<season>:<episode>
 ```
 
 For example:
@@ -177,7 +187,7 @@ ipexample___123___tt1234567
 ipexample___123___tt1234567:2:4
 ```
 
-`app.js` creates and parses these IDs. A provider receives only the original provider item ID in `getMovieData`, and receives the Cinemeta video ID in `getLinks`. `:2:4` means season 2, episode 4. Episodes are one-based. Seasons normally begin at 1, but Cinemeta may use season 0 for specials. Do not reject season 0 unless the provider deliberately does not support specials. Convert a number to a zero-based array index only where the upstream response is known to use a positional array.
+`app.js` creates and parses these IDs. A provider receives only the original provider item ID in `getMovieData`, and receives the selected video ID in `getLinks`. In Cinemeta mode the video ID normally starts with an IMDb ID. In provider mode, `getMeta()` defines the unprefixed video IDs. Use a stable provider value before `:season:episode`, such as the provider item ID. `:2:4` means season 2, episode 4. Episodes are one-based. Seasons normally begin at 1, but season 0 may represent specials. Do not reject season 0 unless the provider deliberately does not support specials.
 
 The provider `key` becomes part of persistent Stremio IDs and catalog IDs. Choose it once, use a simple lowercase slug containing only letters and digits, and do not rename it after release.
 
@@ -452,7 +462,39 @@ try {
 
 `isLogin()` is optional unless the provider exposes a cheap session/profile endpoint and the implementation uses it. The inherited method returns `false`; the addon does not call it directly.
 
-### 4. Resolve the IMDb ID
+### 4. Choose the Metadata Source
+
+Keep the inherited Cinemeta mode when the provider exposes an IMDb ID or can reliably resolve one. In that mode, implement `imdbID()` as described below.
+
+Use provider metadata when the upstream detail response already contains the fields Stremio needs:
+
+```js
+import Source, {METADATA_SOURCE} from './source.js'
+
+export default class Example extends Source {
+    metadataSource = METADATA_SOURCE.PROVIDER
+
+    getMeta(type, id, movieData) {
+        if (!movieData?.title) {
+            return null
+        }
+        return {
+            id: String(id),
+            type,
+            name: movieData.title,
+            description: movieData.description,
+            poster: movieData.poster_url,
+            releaseInfo: movieData.release,
+            genres: movieData.genres ?? [],
+            videos: type === 'series' ? mapProviderEpisodes(movieData, id) : undefined,
+        }
+    }
+}
+```
+
+For series, return one `videos` entry per logical episode, even if the provider has several quality or dubbed editions. Each entry needs a stable `id`, numeric `season`, and numeric `episode`; `getLinks()` can return all playable editions for that selection. Provider metadata is used as-is and does not fall back to Cinemeta when `getMeta()` returns `null`.
+
+#### Cinemeta and IMDb mode
 
 Cinemeta requires an IMDb ID to construct Stremio metadata. Use these strategies in order:
 
@@ -513,7 +555,7 @@ At minimum, add tests for:
 3. Movie stream extraction when movies are supported.
 4. Series season and episode selection when series are supported, especially episode 1 and the last episode.
 5. Missing seasons, episodes, and file URLs for supported media types.
-6. Direct IMDb ID resolution and TMDB fallback.
+6. The selected metadata mode: native field/episode mapping, or direct IMDb resolution and TMDB fallback.
 7. Missing configuration causing zero HTTP requests.
 8. Authentication success, failure, and token expiry if authentication exists.
 9. Verification that tokens and credentials are not logged.
@@ -562,8 +604,8 @@ Update the existing manifest assertions as well. In particular, `test/app.test.j
 Run the complete checks:
 
 ```sh
-npm run check
-npm audit
+pnpm check
+pnpm audit
 docker compose config --quiet
 docker build .
 ```
@@ -577,7 +619,7 @@ Provider APIs are external systems and will fail occasionally. Use these return 
 | Search unavailable | `[]` | `{"metas":[]}` |
 | Detail unavailable | `null` | `{}` for metadata or an empty stream list |
 | No playable movie/episode file | `[]` | `{"streams":[]}` |
-| IMDb ID cannot be resolved | `null` | `{}` |
+| Selected metadata cannot be built | `null` | `{}` |
 | Subtitle service unavailable | Not provider-controlled | `{"subtitles":[]}` |
 
 Do not turn ordinary upstream misses into HTTP 500 responses. Stremio handles valid empty addon responses more reliably.
@@ -589,7 +631,7 @@ Before opening a pull request, verify all of the following:
 - [ ] The provider has a stable lowercase alphanumeric `key`.
 - [ ] Search maps stable IDs, titles, types, and posters when available.
 - [ ] Every supported media type is filtered to its correct catalog.
-- [ ] Details return enough information for IMDb resolution and streams.
+- [ ] Details return enough information for the selected metadata mode and streams.
 - [ ] Series episode mapping is tested with one-based episode numbers and season-zero specials where supported.
 - [ ] Stream URLs are valid, directly playable HTTP(S) resources.
 - [ ] Every HTTP request has a timeout.
@@ -600,17 +642,17 @@ Before opening a pull request, verify all of the following:
 - [ ] The provider is registered in `CATALOGS` and `createProviders`.
 - [ ] The README supported-provider list is updated.
 - [ ] Unit tests and addon-route tests pass.
-- [ ] `npm run check`, `npm audit`, and the Docker build pass.
+- [ ] `pnpm check`, `pnpm audit`, and the Docker build pass.
 
 ## Troubleshooting
 
 ### Search works but opening a title returns no metadata
 
-Check `imdbID()`. It must return a validated IMDb title ID such as `tt0133093`, matching `^tt\d{7,10}$`. Confirm `TMDB_API_KEY` is configured if the provider does not expose IMDb IDs directly.
+In Cinemeta mode, check `imdbID()`. It must return a validated IMDb title ID such as `tt0133093`, matching `^tt\d{7,10}$`. Confirm `TMDB_API_KEY` is configured if the provider does not expose IMDb IDs directly. In provider mode, confirm `getMeta()` returns an object with `id`, `type`, and `name`, plus a non-empty `videos` array for a series.
 
 ### Movie streams work but series streams are empty
 
-Log only the non-sensitive season and episode numbers passed to `getSeriesLinks`. Confirm the Cinemeta video ID is parsed as `imdbId:season:episode`, and verify whether the provider response uses one-based numbers, zero-based array positions, or textual season names.
+Log only the non-sensitive season and episode numbers passed to `getSeriesLinks`. Confirm the selected video ID ends in `:season:episode`, and verify whether the provider response uses one-based numbers, zero-based array positions, or textual season names.
 
 ### URLs appear in Stremio but do not play
 
