@@ -6,7 +6,7 @@ import {createErrorHandler} from './errorMiddleware.js'
 import Digimovie from './sources/digimovie.js'
 import F2Media from './sources/f2media.js'
 import Peepboxtv from './sources/peepboxtv.js'
-import {ID_SEPARATOR} from './sources/source.js'
+import {ID_SEPARATOR, METADATA_SOURCE} from './sources/source.js'
 import {getCinemeta, getSubtitle, modifyUrls} from './utils.js'
 
 export const ADDON_PREFIX = 'ip'
@@ -90,6 +90,16 @@ function logResourceError(logger, resource, error) {
     logger.error(`${resource} request failed`, {message: error?.message ?? String(error)})
 }
 
+async function getProviderMetadata(provider, type, itemId, movieData, services) {
+    if (provider.metadataSource === METADATA_SOURCE.PROVIDER) {
+        const meta = await provider.getMeta(type, itemId, movieData)
+        return meta ? {meta} : null
+    }
+
+    const imdbId = await provider.imdbID(movieData, type)
+    return imdbId ? services.getCinemeta(type, imdbId) : null
+}
+
 export function createAddon({
     env = process.env,
     logger = createLogger(env),
@@ -144,12 +154,13 @@ export function createAddon({
             if (!movieData) {
                 return res.json({})
             }
-            const imdbId = await parsedId.provider.imdbID(movieData, req.params.type)
-            if (!imdbId) {
-                return res.json({})
-            }
-
-            const upstreamMeta = await services.getCinemeta(req.params.type, imdbId)
+            const upstreamMeta = await getProviderMetadata(
+                parsedId.provider,
+                req.params.type,
+                parsedId.providerItemId,
+                movieData,
+                services,
+            )
             if (!upstreamMeta?.meta) {
                 return res.json({})
             }

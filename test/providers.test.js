@@ -178,17 +178,60 @@ test('PeepBoxTV logs API-level detail rejections', async () => {
     }])
 })
 
-test('PeepBoxTV uses the English half of bilingual titles for TMDB lookup', async () => {
-    const httpClient = {
-        async get(url, config) {
-            if (url.includes('/search/multi')) {
-                assert.equal(config.params.query, 'Silo')
-                return {data: {results: [{id: 10, media_type: 'tv'}]}}
-            }
-            return {data: {external_ids: {imdb_id: 'tt14688458'}}}
-        },
-    }
-    const provider = new Peepboxtv('peep.example', silentLogger, httpClient)
-    provider.tmdbApiKey = 'tmdb-key'
-    assert.equal(await provider.imdbID({title: 'سیلو / Silo'}, 'series'), 'tt14688458')
+test('PeepBoxTV maps native details and deduplicates series episodes across editions', () => {
+    const provider = new Peepboxtv('peep.example', silentLogger)
+    const meta = provider.getMeta('series', '1987', {
+        videos_id: '1987',
+        title: 'سیلو / Silo',
+        description: 'Description',
+        release: '2023',
+        runtime: '55 minutes',
+        imdb_rating: '8.1',
+        poster_url: 'https://images.example/poster.jpg',
+        thumbnail_url: 'https://images.example/background.jpg',
+        genre: [{name: 'Drama'}],
+        country: [{name: 'USA'}],
+        director: [{name: 'Director'}],
+        cast: [{name: 'Actor'}],
+        season: [
+            {
+                seasons_name: 'Season 2 - 1080p',
+                episodes: [
+                    {episodes_name: 'Episode 1', image_url: 'https://images.example/episode-1.jpg'},
+                    {episodes_name: 'Episode 2', image_url: 'https://images.example/episode-2.jpg'},
+                ],
+            },
+            {
+                seasons_name: 'Season 2 - 720p',
+                episodes: [{episodes_name: 'Episode 1'}],
+            },
+            {
+                seasons_name: 'Season 1',
+                episodes: [{episodes_name: 'Episode 1'}],
+            },
+        ],
+    })
+
+    assert.equal(meta.name, 'سیلو / Silo')
+    assert.equal(meta.poster, 'https://images.example/poster.jpg')
+    assert.deepEqual(meta.genres, ['Drama'])
+    assert.deepEqual(meta.cast, ['Actor'])
+    assert.deepEqual(meta.videos.map(({id, season, episode}) => ({id, season, episode})), [
+        {id: '1987:1:1', season: 1, episode: 1},
+        {id: '1987:2:1', season: 2, episode: 1},
+        {id: '1987:2:2', season: 2, episode: 2},
+    ])
+})
+
+test('PeepBoxTV maps native movie details without creating episode metadata', () => {
+    const provider = new Peepboxtv('peep.example', silentLogger)
+    const meta = provider.getMeta('movie', '2846', {
+        title: 'Movie',
+        poster_url: 'poster',
+        videos: [{file_url: 'movie.mp4'}],
+    })
+    assert.equal(meta.id, '2846')
+    assert.equal(meta.type, 'movie')
+    assert.equal(meta.name, 'Movie')
+    assert.equal('videos' in meta, false)
 })

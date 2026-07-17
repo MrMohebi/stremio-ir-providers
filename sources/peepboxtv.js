@@ -1,6 +1,6 @@
 import axios from 'axios'
-import Source from './source.js'
-import {logAxiosError, REQUEST_TIMEOUT_MS, searchAndGetTMDB} from '../utils.js'
+import Source, {METADATA_SOURCE} from './source.js'
+import {logAxiosError, REQUEST_TIMEOUT_MS} from '../utils.js'
 
 export const PEEPBOXTV_ANDROID_USER_AGENT = 'okhttp/4.12.0'
 
@@ -16,13 +16,55 @@ function uniqueItems(items) {
     })
 }
 
-function metadataTitle(value) {
-    const parts = String(value ?? '').split('/').map((part) => part.trim()).filter(Boolean)
-    return parts.at(-1) ?? ''
+function itemNames(items) {
+    return (Array.isArray(items) ? items : [])
+        .map((item) => String(item?.name ?? '').trim())
+        .filter(Boolean)
+}
+
+function numberFromText(value, fallback = null) {
+    const normalized = String(value ?? '')
+        .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+        .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    const match = normalized.match(/\d+/)
+    return match ? Number(match[0]) : fallback
+}
+
+function seriesVideos(movieData, itemId) {
+    const videos = []
+    const seen = new Set()
+    const seasons = Array.isArray(movieData?.season) ? movieData.season : []
+
+    for (const seasonData of seasons) {
+        const season = numberFromText(seasonData?.seasons_name)
+        if (!Number.isInteger(season) || season < 0) {
+            continue
+        }
+
+        const episodes = Array.isArray(seasonData?.episodes) ? seasonData.episodes : []
+        episodes.forEach((episodeData, episodeIndex) => {
+            const episode = numberFromText(episodeData?.episodes_name, episodeIndex + 1)
+            const key = `${season}:${episode}`
+            if (!Number.isInteger(episode) || episode < 1 || seen.has(key)) {
+                return
+            }
+            seen.add(key)
+            videos.push({
+                id: `${itemId}:${season}:${episode}`,
+                title: String(episodeData?.episodes_name ?? `Episode ${episode}`),
+                season,
+                episode,
+                thumbnail: episodeData?.image_url,
+            })
+        })
+    }
+
+    return videos.sort((left, right) => left.season - right.season || left.episode - right.episode)
 }
 
 export default class Peepboxtv extends Source {
     key = 'peepboxtv'
+    metadataSource = METADATA_SOURCE.PROVIDER
 
     constructor(baseUrl, logger = console, httpClient = axios, env = process.env) {
         super(baseUrl, logger, httpClient)
@@ -30,7 +72,6 @@ export default class Peepboxtv extends Source {
         this.userId = env.PEEPBOXTV_USER_ID
         this.androidId = env.PEEPBOXTV_ANDROID_ID
         this.apiKey = env.PEEPBOXTV_API_KEY
-        this.tmdbApiKey = env.TMDB_API_KEY
     }
 
     async isLogin() {
@@ -157,16 +198,19 @@ export default class Peepboxtv extends Source {
         const [, seasonText, episodeText] = String(videoId ?? '').split(':')
         const season = Number(seasonText)
         const episode = Number(episodeText)
-        if (!Number.isInteger(season) || !Number.isInteger(episode) || episode < 1) {
+        if (!Number.isInteger(season) || !Number.isInteger(episode) || season < 0 || episode < 1) {
             return []
         }
 
         const seasonTitle = `فصل ${season}`
         const seasons = Array.isArray(movieData?.season) ? movieData.season : []
         return seasons
-            .filter((item) => String(item.seasons_name ?? '').includes(seasonTitle))
+            .filter((item) => numberFromText(item?.seasons_name) === season)
             .map((item) => {
-                const selectedEpisode = item.episodes?.[episode - 1]
+                const episodes = Array.isArray(item?.episodes) ? item.episodes : []
+                const selectedEpisode = episodes.find((candidate, index) => (
+                    numberFromText(candidate?.episodes_name, index + 1) === episode
+                ))
                 const edition = String(item.seasons_name ?? '').split(' - ')[1]
                 return {
                     url: selectedEpisode?.file_url,
@@ -188,13 +232,31 @@ export default class Peepboxtv extends Source {
         return []
     }
 
-    async imdbID(movieData, type) {
-        const existingId = movieData?.imdb_id ?? movieData?.imdb
-        if (typeof existingId === 'string' && existingId.startsWith('tt')) {
-            return existingId
+    getMeta(type, id, movieData) {
+        const itemId = String(id ?? movieData?.videos_id ?? '')
+        const name = String(movieData?.title ?? '').trim()
+        if (!itemId || !name || !['movie', 'series'].includes(type)) {
+            return null
         }
-        const title = metadataTitle(movieData?.title)
-        const tmdbData = await searchAndGetTMDB(title, type, this.httpClient, this.logger, this.tmdbApiKey)
-        return tmdbData?.external_ids?.imdb_id ?? null
+
+        const meta = {
+            id: itemId,
+            type,
+            name,
+            description: movieData?.description,
+            poster: movieData?.poster_url ?? movieData?.thumbnail_url,
+            background: movieData?.thumbnail_url ?? movieData?.poster_url,
+            releaseInfo: movieData?.release,
+            runtime: movieData?.runtime,
+            imdbRating: movieData?.imdb_rating,
+            genres: itemNames(movieData?.genre),
+            country: itemNames(movieData?.country).join(', '),
+            director: itemNames(movieData?.director),
+            cast: itemNames(movieData?.cast),
+        }
+        if (type === 'series') {
+            meta.videos = seriesVideos(movieData, itemId)
+        }
+        return meta
     }
 }
