@@ -1,10 +1,11 @@
 {
   "name": "stremio-ir-providers",
-  "version": "2.2.1",
+  "version": "2.3.0",
+  "packageManager": "pnpm@11.11.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env ./index.js",
+    "dev": "node --watch --env-file=.env ./index.js",
     "dev-proxy": "node --env-file=.env ./proxyServer.js",
     "start": "node ./index.js",
     "start-proxy": "node ./proxyServer.js",
@@ -16,10 +17,11 @@
   "license": "ISC",
   "description": "Stremio addon for streaming movies and series from Iranian providers",
   "engines": {
-    "node": ">=22"
+    "node": ">=24.18.0"
   },
   "dependencies": {
     "axios": "^1.18.1",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "winston": "^3.19.0"

@@ -8,6 +8,7 @@ services:
       DEV_MODE: ${DEV_MODE:-false}
       PORT: 7000
       TMDB_API_KEY: ${TMDB_API_KEY:-}
+      F2MEDIA_BASEURL: ${F2MEDIA_BASEURL:-}
       DIGIMOVIE_BASEURL: ${DIGIMOVIE_BASEURL:-}
       DIGIMOVIE_USERNAME: ${DIGIMOVIE_USERNAME:-}
       DIGIMOVIE_PASSWORD: ${DIGIMOVIE_PASSWORD:-}
@@ -21,7 +22,7 @@ services:
     ports:
       - "7000:7000"
 
-    command: ["npm", "run", "start"]
+    command: ["pnpm", "start"]
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:7000/health"]
       interval: 10s
@@ -40,7 +41,7 @@ services:
     ports:
       - "3005:3005"
 
-    command: ["npm", "run", "start-proxy"]
+    command: ["pnpm", "start-proxy"]
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3005/health"]
       interval: 10s

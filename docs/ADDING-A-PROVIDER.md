@@ -4,7 +4,7 @@ This guide explains what an upstream provider must expose and how to integrate i
 
 The examples use a fictional provider named `Example`. Replace its URLs and response fields with the real provider's API. Do not copy provider-specific credentials into source code or tests.
 
-Before starting, use Node.js 22 or newer, run `npm install`, and confirm the existing suite passes with `npm run check`. You should be comfortable with JavaScript classes, async functions, HTTP APIs, and dependency injection; no Stremio SDK knowledge is required.
+Before starting, use Node.js 24.18.0 or newer (`nvm use` selects the repository version), enable Corepack with `corepack enable`, run `pnpm install`, and confirm the existing suite passes with `pnpm check`. You should be comfortable with JavaScript classes, async functions, HTTP APIs, and dependency injection; no Stremio SDK knowledge is required.
 
 ## How a Provider Integration Works
 
@@ -65,6 +65,14 @@ The current `search(text)` contract does not expose pagination or Stremio's `ski
 Provider item IDs are embedded in URL path segments. They should use a path-safe, reversible format and must not contain the addon's `___` separator. If an upstream ID can contain slashes, `___`, or other unsafe characters, encode it into a safe representation in `search()` and decode it inside `getMovieData()` before calling the provider API.
 
 This repository currently returns simple stream objects containing `url` and `title`. A provider that requires browser-only cookies, JavaScript challenges, DRM, or complex custom playback headers cannot be integrated by only adding a provider class. Supporting one would require a deliberate extension of the stream/proxy architecture and client testing.
+
+### HTML-Only Providers
+
+Providers without an API can extend [`HtmlSource`](../sources/html-source.js). It supplies timeout-limited HTML requests with browser-compatible headers, Cheerio document loading, same-origin page validation, and reversible base64url page-path IDs. Keep selectors, season naming rules, and stream extraction in the provider class because those details are website-specific.
+
+Use `pageId()` on same-origin detail links found during search, then use `decodePagePath()` before fetching a detail page. Validate decoded paths against the provider's actual movie and series URL shapes so a forged addon ID cannot turn the scraper into an arbitrary page fetcher. Parse all network responses inside `search()` or `getMovieData()`; `getLinks()` must remain a synchronous transformation of the parsed result.
+
+Prefer semantic markup such as canonical links, Open Graph metadata, IMDb links, direct download anchors, and season/episode labels. Do not scrape layout-only class names when a more stable attribute is available. Store small representative HTML fragments in tests rather than committing complete upstream pages, which are large and change frequently.
 
 ### Example Search Response
 
@@ -562,8 +570,8 @@ Update the existing manifest assertions as well. In particular, `test/app.test.j
 Run the complete checks:
 
 ```sh
-npm run check
-npm audit
+pnpm check
+pnpm audit
 docker compose config --quiet
 docker build .
 ```
@@ -600,7 +608,7 @@ Before opening a pull request, verify all of the following:
 - [ ] The provider is registered in `CATALOGS` and `createProviders`.
 - [ ] The README supported-provider list is updated.
 - [ ] Unit tests and addon-route tests pass.
-- [ ] `npm run check`, `npm audit`, and the Docker build pass.
+- [ ] `pnpm check`, `pnpm audit`, and the Docker build pass.
 
 ## Troubleshooting
 

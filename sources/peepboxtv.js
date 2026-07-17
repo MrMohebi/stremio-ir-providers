@@ -2,11 +2,30 @@ import axios from 'axios'
 import Source from './source.js'
 import {logAxiosError, REQUEST_TIMEOUT_MS, searchAndGetTMDB} from '../utils.js'
 
+export const PEEPBOXTV_ANDROID_USER_AGENT = 'okhttp/4.12.0'
+
+function uniqueItems(items) {
+    const seen = new Set()
+    return items.filter((item) => {
+        const id = String(item?.videos_id ?? '')
+        if (!id || seen.has(id)) {
+            return false
+        }
+        seen.add(id)
+        return true
+    })
+}
+
+function metadataTitle(value) {
+    const parts = String(value ?? '').split('/').map((part) => part.trim()).filter(Boolean)
+    return parts.at(-1) ?? ''
+}
+
 export default class Peepboxtv extends Source {
     key = 'peepboxtv'
 
     constructor(baseUrl, logger = console, httpClient = axios, env = process.env) {
-        super(baseUrl, logger, httpClient, 'https:')
+        super(baseUrl, logger, httpClient)
         this.providerID = `${this.key}${this.idSeparator}`
         this.userId = env.PEEPBOXTV_USER_ID
         this.androidId = env.PEEPBOXTV_ANDROID_ID
@@ -27,24 +46,36 @@ export default class Peepboxtv extends Source {
             headers: {
                 'api-key': this.apiKey,
                 Host: new URL(this.baseUrl).host,
+                'User-Agent': PEEPBOXTV_ANDROID_USER_AGENT,
             },
             timeout: REQUEST_TIMEOUT_MS,
         }
     }
 
     async search(text) {
-        if (!this.baseUrl || !this.apiKey || !String(text ?? '').trim()) {
+        const query = String(text ?? '').trim()
+        if (!this.baseUrl) {
+            this.logger.warn('PeepBoxTV search skipped', {reason: 'PEEPBOXTV_BASEURL is missing'})
+            return []
+        }
+        if (!query) {
+            this.logger.debug('PeepBoxTV search skipped', {reason: 'empty query'})
+            return []
+        }
+        if (!this.apiKey) {
+            this.logger.warn('PeepBoxTV search skipped', {reason: 'PEEPBOXTV_API_KEY is missing'})
             return []
         }
 
         try {
+            this.logger.debug('PeepBoxTV search started', {query, baseUrl: this.baseUrl})
             const response = await this.httpClient.get(this.endpoint('rest-api/v130/search'), {
                 ...this.requestConfig(),
                 params: {
-                    q: text,
+                    q: query,
                     page: 1,
                     type: 'all',
-                    range_to: 2030,
+                    range_to: 2040,
                     range_from: 1300,
                     tv_category_id: 0,
                     genre_id: 0,
@@ -53,9 +84,11 @@ export default class Peepboxtv extends Source {
                     imdb_from: 1,
                 },
             })
-            const items = Array.isArray(response.data?.movie) ? response.data.movie : []
-            return items
-                .filter((item) => item?.videos_id != null)
+            const items = uniqueItems([
+                ...(Array.isArray(response.data?.movie) ? response.data.movie : []),
+                ...(Array.isArray(response.data?.tvseries) ? response.data.tvseries : []),
+            ])
+            const results = items
                 .map((item) => ({
                     name: item.title ?? '',
                     poster: item.thumbnail_url,
@@ -63,6 +96,8 @@ export default class Peepboxtv extends Source {
                     id: String(item.videos_id),
                     genres: [],
                 }))
+            this.logger.debug('PeepBoxTV search completed', {query, resultCount: results.length})
+            return results
         } catch (error) {
             logAxiosError(error, this.logger, 'PeepBoxTV search failed')
             return []
@@ -70,11 +105,16 @@ export default class Peepboxtv extends Source {
     }
 
     async getMovieData(type, id) {
-        if (!this.baseUrl || !this.apiKey || !id) {
+        if (!this.baseUrl || !id) {
+            return null
+        }
+        if (!this.apiKey) {
+            this.logger.warn('PeepBoxTV detail skipped', {reason: 'PEEPBOXTV_API_KEY is missing'})
             return null
         }
 
         try {
+            this.logger.debug('PeepBoxTV detail started', {type, id: String(id)})
             const response = await this.httpClient.get(this.endpoint('rest-api/v130/single_details'), {
                 ...this.requestConfig(),
                 params: {
@@ -84,7 +124,22 @@ export default class Peepboxtv extends Source {
                     android_id: this.androidId,
                 },
             })
-            return response.data?.videos_id ? response.data : null
+            if (!response.data?.videos_id) {
+                this.logger.warn('PeepBoxTV detail rejected', {
+                    type,
+                    id: String(id),
+                    status: response.data?.status,
+                    upstreamMessage: response.data?.message,
+                })
+                return null
+            }
+            this.logger.debug('PeepBoxTV detail completed', {
+                type,
+                id: String(id),
+                seasonCount: Array.isArray(response.data.season) ? response.data.season.length : 0,
+                videoCount: Array.isArray(response.data.videos) ? response.data.videos.length : 0,
+            })
+            return response.data
         } catch (error) {
             logAxiosError(error, this.logger, 'PeepBoxTV detail request failed')
             return null
@@ -138,7 +193,7 @@ export default class Peepboxtv extends Source {
         if (typeof existingId === 'string' && existingId.startsWith('tt')) {
             return existingId
         }
-        const title = String(movieData?.title ?? '').split('/')[0].trim()
+        const title = metadataTitle(movieData?.title)
         const tmdbData = await searchAndGetTMDB(title, type, this.httpClient, this.logger, this.tmdbApiKey)
         return tmdbData?.external_ids?.imdb_id ?? null
     }

@@ -4,16 +4,18 @@ import winston from 'winston'
 
 import {createErrorHandler} from './errorMiddleware.js'
 import Digimovie from './sources/digimovie.js'
+import F2Media from './sources/f2media.js'
 import Peepboxtv from './sources/peepboxtv.js'
 import {ID_SEPARATOR} from './sources/source.js'
 import {getCinemeta, getSubtitle, modifyUrls} from './utils.js'
 
 export const ADDON_PREFIX = 'ip'
-export const ADDON_VERSION = '2.2.1'
+export const ADDON_VERSION = '2.3.0'
 
 const CATALOGS = [
-    {key: 'digimovie', name: 'DigiMovie'},
+    {key: 'f2media', name: 'F2Media'},
     {key: 'peepboxtv', name: 'PeepBoxTv'},
+    // {key: 'digimovie', name: 'DigiMovie'},
 ]
 
 export function createLogger(env = process.env) {
@@ -51,8 +53,9 @@ export function createManifest(env = process.env) {
 
 export function createProviders({env = process.env, logger = console, httpClient} = {}) {
     return [
-        new Digimovie(env.DIGIMOVIE_BASEURL, logger, httpClient, env),
+        new F2Media(env.F2MEDIA_BASEURL, logger, httpClient, env),
         new Peepboxtv(env.PEEPBOXTV_BASEURL, logger, httpClient, env),
+        // new Digimovie(env.DIGIMOVIE_BASEURL, logger, httpClient, env),
     ]
 }
 
@@ -114,6 +117,13 @@ export function createAddon({
                     ...item,
                     id: `${ADDON_PREFIX}${provider.providerID}${item.id}`,
                 }))
+            logger.debug('Catalog search completed', {
+                provider: provider.key,
+                type: req.params.type,
+                query: search,
+                resultCount: Array.isArray(results) ? results.length : 0,
+                metaCount: metas.length,
+            })
             return res.json({metas})
         } catch (error) {
             logResourceError(logger, 'Catalog', error)
