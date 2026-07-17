@@ -1,166 +1,145 @@
-import Source from "./source.js";
-import Axios from "axios";
-import {logAxiosError, searchAndGetTMDB} from "../utils.js";
+import axios from 'axios'
+import Source from './source.js'
+import {logAxiosError, REQUEST_TIMEOUT_MS, searchAndGetTMDB} from '../utils.js'
 
-export default class Peepboxtv extends Source{
-    userId = process.env.PEEPBOXTV_USER_ID
-    androidId = process.env.PEEPBOXTV_ANDROID_ID
-    apiKey = process.env.PEEPBOXTV_API_KEY
+export default class Peepboxtv extends Source {
+    key = 'peepboxtv'
 
-    constructor(baseURL, logger) {
-        super(baseURL, logger)
-        this.providerID = "peepboxtv" + this.idSeparator
+    constructor(baseUrl, logger = console, httpClient = axios, env = process.env) {
+        super(baseUrl, logger, httpClient, 'https:')
+        this.providerID = `${this.key}${this.idSeparator}`
+        this.userId = env.PEEPBOXTV_USER_ID
+        this.androidId = env.PEEPBOXTV_ANDROID_ID
+        this.apiKey = env.PEEPBOXTV_API_KEY
+        this.tmdbApiKey = env.TMDB_API_KEY
     }
 
-    async isLogin(){
+    async isLogin() {
         return true
     }
 
-    async login(){
+    async login() {
         return true
+    }
+
+    requestConfig() {
+        return {
+            headers: {
+                'api-key': this.apiKey,
+                Host: new URL(this.baseUrl).host,
+            },
+            timeout: REQUEST_TIMEOUT_MS,
+        }
     }
 
     async search(text) {
-        try {
-            this.logger.debug(`PeepBoxTv searching for ${text}`)
-            const res = await Axios.request({
-                url: `http://${this.baseURL}/rest-api/v130/search`,
-                method: "get",
-                params:{
-                    q:text,
-                    page:1,
-                    type:"all",
-                    range_to:2030,
-                    range_from:1300,
-                    tv_category_id:0,
-                    genre_id:0,
-                    country_id:0,
-                    imdb_to:10,
-                    imdb_from:1,
-                    // user_id:this.userId,
-                },
-                headers: {
-                    'Content-Type': 'application/json',
-                    "api-key": this.apiKey,
-                    "Host": this.baseURL,
-                }
-            })
-
-            if(!!res){
-                const items = []
-
-                if(!res.data.hasOwnProperty("movie")){
-                    return items
-                }
-
-                for (const item of res.data.movie) {
-                    const movie = {
-                        name: item.title,
-                        poster: item.thumbnail_url,
-                        type:item.is_tvseries === "1" ? "series" : "movie",
-                        id:item.videos_id,
-                        genres: []
-                    }
-                    items.push(movie)
-                }
-                return items
-            }
-        }catch (e) {
-            logAxiosError(e, this.logger, "PeepBoxTv search error: ")
+        if (!this.baseUrl || !this.apiKey || !String(text ?? '').trim()) {
+            return []
         }
 
+        try {
+            const response = await this.httpClient.get(this.endpoint('rest-api/v130/search'), {
+                ...this.requestConfig(),
+                params: {
+                    q: text,
+                    page: 1,
+                    type: 'all',
+                    range_to: 2030,
+                    range_from: 1300,
+                    tv_category_id: 0,
+                    genre_id: 0,
+                    country_id: 0,
+                    imdb_to: 10,
+                    imdb_from: 1,
+                },
+            })
+            const items = Array.isArray(response.data?.movie) ? response.data.movie : []
+            return items
+                .filter((item) => item?.videos_id != null)
+                .map((item) => ({
+                    name: item.title ?? '',
+                    poster: item.thumbnail_url,
+                    type: String(item.is_tvseries) === '1' ? 'series' : 'movie',
+                    id: String(item.videos_id),
+                    genres: [],
+                }))
+        } catch (error) {
+            logAxiosError(error, this.logger, 'PeepBoxTV search failed')
+            return []
+        }
+    }
+
+    async getMovieData(type, id) {
+        if (!this.baseUrl || !this.apiKey || !id) {
+            return null
+        }
+
+        try {
+            const response = await this.httpClient.get(this.endpoint('rest-api/v130/single_details'), {
+                ...this.requestConfig(),
+                params: {
+                    type: type === 'movie' ? 'movie' : 'tvseries',
+                    id,
+                    user_id: this.userId,
+                    android_id: this.androidId,
+                },
+            })
+            return response.data?.videos_id ? response.data : null
+        } catch (error) {
+            logAxiosError(error, this.logger, 'PeepBoxTV detail request failed')
+            return null
+        }
+    }
+
+    getMovieLinks(movieData) {
+        const videos = Array.isArray(movieData?.videos) ? movieData.videos : []
+        return videos
+            .filter((item) => item?.file_url)
+            .map((item) => ({url: item.file_url, title: item.label ?? ''}))
+    }
+
+    getSeriesLinks(movieData, videoId) {
+        const [, seasonText, episodeText] = String(videoId ?? '').split(':')
+        const season = Number(seasonText)
+        const episode = Number(episodeText)
+        if (!Number.isInteger(season) || !Number.isInteger(episode) || episode < 1) {
+            return []
+        }
+
+        const seasonTitle = `فصل ${season}`
+        const seasons = Array.isArray(movieData?.season) ? movieData.season : []
+        return seasons
+            .filter((item) => String(item.seasons_name ?? '').includes(seasonTitle))
+            .map((item) => {
+                const selectedEpisode = item.episodes?.[episode - 1]
+                const edition = String(item.seasons_name ?? '').split(' - ')[1]
+                return {
+                    url: selectedEpisode?.file_url,
+                    title: [movieData?.title, seasonTitle, selectedEpisode?.episodes_name, edition]
+                        .filter(Boolean)
+                        .join(' - '),
+                }
+            })
+            .filter((item) => item.url)
+    }
+
+    getLinks(type, videoId, movieData) {
+        if (type === 'movie') {
+            return this.getMovieLinks(movieData)
+        }
+        if (type === 'series') {
+            return this.getSeriesLinks(movieData, videoId)
+        }
         return []
     }
 
-    async getMovieData(type, id){
-        try {
-            this.logger.debug(`PeepBoxTv getting movie with id ${id}`)
-            const res = await Axios.request({
-                url: `https://${this.baseURL}/rest-api/v130/single_details`,
-                method: "get",
-                params:{
-                    type: type === "movie" ? "movie" : "tvseries",
-                    id:id,
-                    user_id:this.userId,
-                    android_id:this.androidId,
-                },
-                headers: {
-                    'Content-Type': 'application/json',
-                    "api-key": this.apiKey,
-                    "Host": this.baseURL,
-                }
-            })
-            if(res.data?.videos_id){
-                return res.data;
-            }
-        }catch (e) {
-            logAxiosError(e, this.logger, "PeepBoxTv getMovieData error: ")
+    async imdbID(movieData, type) {
+        const existingId = movieData?.imdb_id ?? movieData?.imdb
+        if (typeof existingId === 'string' && existingId.startsWith('tt')) {
+            return existingId
         }
-
-        return null
-    }
-
-    getMovieLinks(movieData){
-        const links = []
-
-        for (const item of movieData.videos) {
-            const link = {url:"", title:""}
-            link.title = item.label
-            link.url = item.file_url
-
-            links.push(link)
-        }
-
-        return links
-    }
-
-    getSeriesLinks(movieData, imdbId){
-        const links = []
-        try {
-            const season = (+imdbId.split(":")[1])
-            const episode = +imdbId.split(":")[2]
-
-            const seasonTitle = "فصل" + " " + season
-
-            for (const item of movieData.season.filter(i=>i.seasons_name.includes(seasonTitle))) {
-                const link = {url:"", title:""}
-
-                link.title = movieData.title + " - " + seasonTitle + " - " + item?.episodes[episode+1].episodes_name
-
-                const seasonTitleParts = item.seasons_name.split(" - ")
-
-                if(seasonTitleParts.length > 1){
-                    link.title += " - " + seasonTitleParts[1]
-                }
-
-                link.url = item?.episodes[episode+1].file_url
-
-                links.push(link)
-            }
-        }catch (e) {
-            this.logger.debug(`error with => PeepBoxTv, ${movieData}, ${imdbId}`)
-            this.logger.error(e.message)
-        }
-
-        return links
-    }
-
-    getLinks(type, imdbId, movieData){
-        if(type === "movie"){
-            return this.getMovieLinks(movieData)
-        }
-
-        if(type === "series"){
-            return this.getSeriesLinks(movieData, imdbId)
-        }
-
-    }
-
-    async imdbID(movieData){
-        const tmdbData = await searchAndGetTMDB(  `${movieData.title.split("/")[0]}`)
-        if(tmdbData){
-            return tmdbData.external_ids.imdb_id
-        }
-        return null
+        const title = String(movieData?.title ?? '').split('/')[0].trim()
+        const tmdbData = await searchAndGetTMDB(title, type, this.httpClient, this.logger, this.tmdbApiKey)
+        return tmdbData?.external_ids?.imdb_id ?? null
     }
 }

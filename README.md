@@ -1,33 +1,34 @@
 > از اجباری برگشتم و دارم روش کار میکنم ❤️.
 
-# Stremio IR Provide
-A plugin for Stremio to stream movies and series from Iranian providers like 30nama or avamovie. 
+# Stremio IR Provider
+A Stremio addon that finds movies and series on Iranian streaming providers.
 
 Also, you can share one account for multiple users without any trouble :)
 
 ###### **Update:** We now support Iranian movies and series through PeepboxTV :)
 
-## Install:
-- fallow this [install guide - English](docs/INSTALL.md)
-- or for Persian version fallow [آموزش نصب فارسی](docs/INSTALL-fa.md)
+## Install
+
+- Follow the [English installation guide](docs/INSTALL.md).
+- Or use the [Persian installation guide](docs/INSTALL-fa.md).
 
 ## Usage:
 After installing the plugin (https://sip.m17i.xyz/manifest.json), 
 search title and results will be available to watch.
 
-## proxy server:
+## Proxy server
 In countries like Iran, where IMDb and Metahub are sanctioned or censored, thumbnails and covers provided by these sources may be inaccessible. If your addon server is hosted outside these restricted regions, this service can automatically proxy all covers and thumbnails through a Proxy Server.
 
 **Enabling the Proxy Feature:**
 
-1. To enable this feature, set [PROXY_ENABLE](./.env.example#L11) to true.
-2. Specify the public URL endpoint of your proxy server by setting [PROXY_URL](./.env.example#L11).
+1. Set `PROXY_ENABLE=true` in `.env`.
+2. Set `PROXY_URL` to the public URL of your proxy server.
 
 The other default settings are sufficient for basic usage and should work without additional modifications.
-## Supported provides:
+## Supported providers
 
-- [x] [Avamovie](https://avamovie.shop)
-- [x] [peepboxtv](https://peepboxtv.me)
+- [x] DigiMovie
+- [x] PeepBoxTV
 - [ ] [filmju](https://filmju.com/)
 - [ ] [30nama](https://30nama.com)
 - [ ] [Download day](https://download-day.com/)
@@ -37,3 +38,17 @@ The other default settings are sufficient for basic usage and should work withou
 - [ ] Display movies and new items from providers on the index page
 - [ ] Integrate RPDB for posters
 - [ ] Fetch results from IR providers for movies and series on the index page
+
+## Development
+
+Copy `.env.example` to `.env`, fill in the provider credentials, then run:
+
+```sh
+npm install
+npm test
+npm run dev
+```
+
+The addon listens on `http://127.0.0.1:7000` by default. Set `PORT` to override it.
+
+To integrate another streaming source, see [Adding a New Provider](docs/ADDING-A-PROVIDER.md).

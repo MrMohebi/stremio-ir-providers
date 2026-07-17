@@ -4,23 +4,26 @@ services:
     container_name: stremioIrProviders
     restart: unless-stopped
     environment:
-      - LOG_LEVEL=info
-      - DEV_MODE=false
-
-      - AVAMOVIE_BASEURL=
-      - AVAMOVIE_USERNAME=
-      - AVAMOVIE_PASSWORD=
-
-      - PROXY_ENABLE=false
-      - PROXY_PORT=3005
-      - PROXY_URL=http://127.0.0.1:3005
-      - PROXY_PATH=proxy
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DEV_MODE: ${DEV_MODE:-false}
+      PORT: 7000
+      TMDB_API_KEY: ${TMDB_API_KEY:-}
+      DIGIMOVIE_BASEURL: ${DIGIMOVIE_BASEURL:-}
+      DIGIMOVIE_USERNAME: ${DIGIMOVIE_USERNAME:-}
+      DIGIMOVIE_PASSWORD: ${DIGIMOVIE_PASSWORD:-}
+      PEEPBOXTV_BASEURL: ${PEEPBOXTV_BASEURL:-}
+      PEEPBOXTV_USER_ID: ${PEEPBOXTV_USER_ID:-}
+      PEEPBOXTV_ANDROID_ID: ${PEEPBOXTV_ANDROID_ID:-}
+      PEEPBOXTV_API_KEY: ${PEEPBOXTV_API_KEY:-}
+      PROXY_ENABLE: ${PROXY_ENABLE:-false}
+      PROXY_URL: ${PROXY_URL:-http://127.0.0.1:3005}
+      PROXY_PATH: ${PROXY_PATH:-proxy}
     ports:
-      - 7000:7000
+      - "7000:7000"
 
-    command: [ "npm", "run", "start" ]
+    command: ["npm", "run", "start"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:7000/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:7000/health"]
       interval: 10s
       timeout: 2s
       retries: 2
@@ -31,10 +34,16 @@ services:
     container_name: stremioIrProviders-proxy
     restart: unless-stopped
     environment:
-      - PROXY_PORT=3005
-      - PROXY_ALLOWED_URLS=metahub.space,imdb.com,strem.io,tmdb.org
-      - PROXY_PATH=proxy
+      PROXY_PORT: 3005
+      PROXY_ALLOWED_URLS: ${PROXY_ALLOWED_URLS:-metahub.space,imdb.com,strem.io,tmdb.org}
+      PROXY_PATH: ${PROXY_PATH:-proxy}
     ports:
-      - 3005:3005
+      - "3005:3005"
 
-    command: [ "npm", "run", "start-proxy" ]
+    command: ["npm", "run", "start-proxy"]
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3005/health"]
+      interval: 10s
+      timeout: 2s
+      retries: 2
+      start_period: 10s
