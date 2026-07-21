@@ -72,7 +72,7 @@ Paste the following URL into Stremio → Community Add-ons → **Install from UR
 https://sip.m17i.xyz/manifest.json
 ```
 
-> **Note:** An official personal deployment is available at `https://stremio-ir-providers.janemkomeil8.workers.dev/manifest.json`. This is not the official project deployment — see [Deployment](#-deployment) to run your own instance.
+> **Note:** An official personal deployment is available at `https://persianstremio.vercel.app/manifest.json`. This is not the official project deployment — see [Deployment](#-deployment) to run your own instance.
 
 ### Run Locally
 
