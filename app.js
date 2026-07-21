@@ -184,7 +184,7 @@ async function imdbStreamResponse(type, id, providers, services, logger) {
             const results = await provider.search(cleanTitle)
             const match = results.find((r) => {
                 const cleanName = r.name.replace(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g, '').toLowerCase()
-                return cleanName.includes(cleanTitle) || cleanTitle.includes(cleanName)
+                return (cleanName.includes(cleanTitle) || cleanTitle.includes(cleanName)) && r.type === type
             })
             if (!match) {
                 return {key: provider.key, streams: []}

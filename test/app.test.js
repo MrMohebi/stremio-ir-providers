@@ -183,6 +183,53 @@ test('stream and subtitle routes return valid arrays', async () => {
     })
 })
 
+test('IMDb series request does not match a movie with the same title', async () => {
+    const provider = {
+        key: 'digimovie',
+        providerID: 'digimovie___',
+        async search(query) {
+            return [
+                {id: 'movie-1', name: 'Breaking Bad', type: 'movie', genres: []},
+                {id: 'series-1', name: 'Breaking Bad', type: 'series', genres: []},
+            ]
+        },
+        async getMovieData(type, id) {
+            if (id === 'series-1') return {title: 'Breaking Bad', videos_id: 'series-1'}
+            if (id === 'movie-1') return {title: 'Breaking Bad', videos_id: 'movie-1'}
+            return null
+        },
+        async imdbID() { return 'tt1234567' },
+        getLinks(type, videoId, movieData) {
+            if (movieData?.videos_id === 'series-1') {
+                return [{url: 'https://series.example/episode.mkv', title: 'Series stream'}]
+            }
+            return [{url: 'https://movie.example/film.mp4', title: 'Movie stream'}]
+        },
+    }
+
+    await withServer(createAddon({
+        logger: silentLogger,
+        env: {},
+        providers: [provider],
+        services: {
+            async getCinemeta(type, imdbId) {
+                return {meta: {id: imdbId, name: 'Breaking Bad', type}}
+            },
+            async getSubtitle() { return {subtitles: []} },
+        },
+    }), async (baseUrl) => {
+        const seriesRes = await fetch(`${baseUrl}/stream/series/tt1234567.json`)
+        const seriesBody = await seriesRes.json()
+        assert.equal(seriesBody.streams.length, 1)
+        assert.ok(seriesBody.streams[0].url.includes('series.example'))
+
+        const movieRes = await fetch(`${baseUrl}/stream/movie/tt1234567.json`)
+        const movieBody = await movieRes.json()
+        assert.equal(movieBody.streams.length, 1)
+        assert.ok(movieBody.streams[0].url.includes('movie.example'))
+    })
+})
+
 test('malformed or unknown IDs cannot select a provider by substring', async () => {
     const provider = createProvider()
     assert.equal(parseAddonId('prefix-digimovie___10', [provider]), null)

@@ -69,14 +69,16 @@ Whether you're looking for the latest Persian films, classic Iranian series, int
 Paste the following URL into Stremio → Community Add-ons → **Install from URL**:
 
 ```
-https://stremio-ir-providers.janemkomeil8.workers.dev/manifest.json
+https://sip.m17i.xyz/manifest.json
 ```
+
+> **Note:** An official personal deployment is available at `https://stremio-ir-providers.janemkomeil8.workers.dev/manifest.json`. This is not the official project deployment — see [Deployment](#-deployment) to run your own instance.
 
 ### Run Locally
 
 ```sh
 # 1. Clone the repository
-git clone https://github.com/Esmaeli/stremio-ir-providers.git
+git clone https://github.com/MrMohebi/stremio-ir-providers.git
 cd stremio-ir-providers
 
 # 2. Install dependencies
@@ -264,7 +266,7 @@ Contributions are welcome! Whether it's adding a new provider, fixing a bug, or 
 
 ## 📄 License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is open source and available under the [ISC License](https://opensource.org/licenses/ISC).
 
 ---
 
