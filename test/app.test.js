@@ -55,15 +55,22 @@ function createTestApp(provider = createProvider(), options = {}) {
 test('manifest keeps the public addon contract', () => {
     const manifest = createManifest({DEV_MODE: 'true'})
     assert.equal(manifest.id, 'org.mmmohebi.stremioIrProviders')
-    assert.equal(manifest.version, '2.4.0')
+    assert.equal(manifest.version, '2.5.0')
     assert.equal(manifest.name, 'Iran Provider - DEV')
     assert.deepEqual(manifest.catalogs.map((catalog) => catalog.id), [
         'f2media_movies',
         'f2media_series',
         'peepboxtv_movies',
         'peepboxtv_series',
+        'cinamatic_movies',
+        'cinamatic_series',
+        'aslmoviez_movies',
+        'aslmoviez_series',
+        'serialblog_movies',
+        'serialblog_series',
+        'iptv_tv',
     ])
-    assert.deepEqual(manifest.types, ['movie', 'series'])
+    assert.deepEqual(manifest.types, ['movie', 'series', 'tv'])
 })
 
 test('catalog filters by type and creates stable provider IDs', async () => {
@@ -164,14 +171,62 @@ test('metadata proxying rewrites nested HTTP URLs', async () => {
 test('stream and subtitle routes return valid arrays', async () => {
     await withServer(createTestApp(), async (baseUrl) => {
         const streamResponse = await fetch(`${baseUrl}/stream/series/ipdigimovie___20___tt1234567:1:1.json`)
-        assert.deepEqual(await streamResponse.json(), {
-            streams: [{url: 'https://media.example/movie.mkv', title: '1080p'}],
-        })
+        const body = await streamResponse.json()
+        assert.equal(body.streams.length, 1)
+        assert.equal(body.streams[0].url, 'https://media.example/movie.mkv')
+        assert.ok(body.streams[0].title.includes('1080p'))
 
         const subtitleResponse = await fetch(`${baseUrl}/subtitles/series/ipdigimovie___20___tt1234567:1:1.json`)
         assert.deepEqual(await subtitleResponse.json(), {
             subtitles: [{id: 'sub-1', url: 'https://sub.example/file.srt'}],
         })
+    })
+})
+
+test('IMDb series request does not match a movie with the same title', async () => {
+    const provider = {
+        key: 'digimovie',
+        providerID: 'digimovie___',
+        async search(query) {
+            return [
+                {id: 'movie-1', name: 'Breaking Bad', type: 'movie', genres: []},
+                {id: 'series-1', name: 'Breaking Bad', type: 'series', genres: []},
+            ]
+        },
+        async getMovieData(type, id) {
+            if (id === 'series-1') return {title: 'Breaking Bad', videos_id: 'series-1'}
+            if (id === 'movie-1') return {title: 'Breaking Bad', videos_id: 'movie-1'}
+            return null
+        },
+        async imdbID() { return 'tt1234567' },
+        getLinks(type, videoId, movieData) {
+            if (movieData?.videos_id === 'series-1') {
+                return [{url: 'https://series.example/episode.mkv', title: 'Series stream'}]
+            }
+            return [{url: 'https://movie.example/film.mp4', title: 'Movie stream'}]
+        },
+    }
+
+    await withServer(createAddon({
+        logger: silentLogger,
+        env: {},
+        providers: [provider],
+        services: {
+            async getCinemeta(type, imdbId) {
+                return {meta: {id: imdbId, name: 'Breaking Bad', type}}
+            },
+            async getSubtitle() { return {subtitles: []} },
+        },
+    }), async (baseUrl) => {
+        const seriesRes = await fetch(`${baseUrl}/stream/series/tt1234567.json`)
+        const seriesBody = await seriesRes.json()
+        assert.equal(seriesBody.streams.length, 1)
+        assert.ok(seriesBody.streams[0].url.includes('series.example'))
+
+        const movieRes = await fetch(`${baseUrl}/stream/movie/tt1234567.json`)
+        const movieBody = await movieRes.json()
+        assert.equal(movieBody.streams.length, 1)
+        assert.ok(movieBody.streams[0].url.includes('movie.example'))
     })
 })
 
