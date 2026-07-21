@@ -55,6 +55,11 @@ function urlFromOnclick(value) {
     return match?.[2] ?? null
 }
 
+function extractQualityFromFilename(url) {
+    const match = String(url ?? '').match(/\.(\d{3,4}p)\b/i)
+    return match?.[1]?.toLowerCase() ?? null
+}
+
 function mediaUrl($element) {
     const href = $element.attr('href')
     if (isHttpUrl(href)) {
@@ -64,24 +69,16 @@ function mediaUrl($element) {
     return isHttpUrl(onclickUrl) ? onclickUrl : null
 }
 
-function listLabel($, item, season, episode) {
-    const list = $(item).closest('.download-list')
-    const quality = normalizeText($(item).closest('li').find('.text[dir="ltr"]').first().text())
-    const edition = normalizeText(list.children('.title').first().text())
-    return [season && `Season ${season}`, episode && `Episode ${episode}`, quality, edition]
-        .filter(Boolean)
-        .join(' - ')
-}
-
 function parseMovieLinks($) {
     const links = []
     $('#downloads .download-list li').each((_, item) => {
-        $(item).find('a[download], a[onclick*="handleDownloadClick"]').each((__, anchor) => {
-            const url = mediaUrl($(anchor))
-            if (url) {
-                links.push({url, title: listLabel($, item)})
-            }
-        })
+        const quality = normalizeText($(item).find('.text[dir="ltr"]').first().text())
+        const url = mediaUrl($(item).find('a[download][href], a[onclick*="handleDownloadClick"]').first())
+
+        if (url) {
+            const titleParts = [quality].filter(Boolean)
+            links.push({url, title: titleParts.join(' - ')})
+        }
     })
     return uniqueLinks(links)
 }
@@ -89,18 +86,29 @@ function parseMovieLinks($) {
 function parseSeriesLinks($) {
     const links = []
     $('#downloads .download-season').each((seasonIndex, seasonElement) => {
-        const season = seasonFromText($(seasonElement).children('button').first().text(), seasonIndex + 1)
+        const season = seasonFromText(
+            normalizeText($(seasonElement).children('button').first().text()),
+            seasonIndex + 1,
+        )
         $(seasonElement).find('.series-downloaditems > .d-flex').each((episodeIndex, episodeElement) => {
             const directLink = $(episodeElement).find('a.btn-default[href]').last()
             const fallbackLink = $(episodeElement).find('a[onclick*="handleDownloadClick"]').first()
             const url = mediaUrl(directLink.length ? directLink : fallbackLink)
             const episode = numberFromText(directLink.text()) ?? episodeIndex + 1
             if (url) {
+                const quality = normalizeText($(episodeElement).find('.text[dir="ltr"]').first().text())
+                    || extractQualityFromFilename(url)
+                    || ''
+                const titleParts = [
+                    `S${season}E${String(episode).padStart(2, '0')}`,
+                    quality,
+                ].filter(Boolean)
                 links.push({
                     season,
                     episode,
+                    quality: quality || null,
                     url,
-                    title: listLabel($, episodeElement, season, episode),
+                    title: titleParts.join(' - '),
                 })
             }
         })
@@ -108,16 +116,20 @@ function parseSeriesLinks($) {
     return uniqueLinks(links, (item) => `${item.season}:${item.episode}:${item.url}`)
 }
 
-export function parseF2MediaDetail($, type, path) {
+function parseF2MediaMovieDetail($, path) {
     const imdbHref = $('a[href*="imdb.com/title/tt"]').first().attr('href') ?? ''
     const imdbId = imdbHref.match(/\/title\/(tt\d+)/)?.[1] ?? null
-    const title = normalizeText($('#post-intro h1.entry-title').first().text())
-    return {
-        path,
-        title,
-        imdbId,
-        links: type === 'series' ? parseSeriesLinks($) : parseMovieLinks($),
-    }
+    const title = normalizeText($('h1.entry-title').first().text())
+    const links = parseMovieLinks($)
+    return {path, title, imdbId, isSeries: false, links}
+}
+
+function parseF2MediaSeriesDetail($, path) {
+    const imdbHref = $('a[href*="imdb.com/title/tt"]').first().attr('href') ?? ''
+    const imdbId = imdbHref.match(/\/title\/(tt\d+)/)?.[1] ?? null
+    const title = normalizeText($('h1.entry-title').first().text())
+    const links = parseSeriesLinks($)
+    return {path, title, imdbId, isSeries: true, links}
 }
 
 function isDetailPath(type, path) {
@@ -157,43 +169,95 @@ export default class F2Media extends HtmlSource {
 
         try {
             this.logger.debug('F2Media search started', {query, baseUrl: this.baseUrl})
-            const $ = await this.fetchDocument('/', {
-                params: {
-                    s: query,
-                    type: 'both',
-                    'genre[]': 0,
-                    sortby: 'newest',
-                    imdbrate: 0,
-                    'madeby[]': 0,
-                    min_year: 1800,
-                    max_year: new Date().getFullYear(),
-                    paged: 1,
-                },
-            })
+            const $ = await this.fetchDocument('/', {params: {s: query}})
             if (!$) {
                 return []
             }
 
             const results = []
-            $('main article.entry > a.stretched-link[rel="bookmark"]').each((_, anchor) => {
+            const q = query.toLowerCase()
+
+            $('article.entry a.stretched-link[rel="bookmark"]').each((_, anchor) => {
                 const item = $(anchor).closest('article.entry')
-                const path = this.pagePath($(anchor).attr('href'))
+                const href = $(anchor).attr('href')
+                const path = this.pagePath(href)
                 const id = this.pageId(path)
                 const name = normalizeText($(anchor).find('.entry-title').text())
-                const type = path?.startsWith('/series/') ? 'series' : 'movie'
-                if (!id || !name || !isDetailPath(type, path)) {
+
+                if (!id || !name || !path) {
                     return
                 }
+
+                if (!name.toLowerCase().includes(q)) {
+                    return
+                }
+
+                const type = path.startsWith('/series/') ? 'series' : 'movie'
+                if (!isDetailPath(type, path)) {
+                    return
+                }
+
+                const poster = item.find('figure.entry-cover img').first().attr('src') ?? null
+
                 results.push({
                     id,
                     name,
-                    poster: item.find('figure.entry-cover img').first().attr('src'),
+                    poster,
                     type,
-                    genres: item.find('.entry-ganers a').map((__, genre) => normalizeText($(genre).text())).get(),
+                    genres: [],
                 })
             })
-            this.logger.debug('F2Media search completed', {query, resultCount: results.length})
-            return results
+
+            this.logger.debug('F2Media search completed', {query, resultCount: results.length, method: 'html'})
+            if (results.length > 0) {
+                return results
+            }
+
+            this.logger.debug('F2Media search falling back to REST API', {query})
+            const restUrl = `${this.baseUrl}/wp-json/wp/v2`
+            const lcQuery = query.toLowerCase()
+            const fallbackResults = []
+
+            const [postsRes, seriesRes] = await Promise.allSettled([
+                this.httpClient.get(`${restUrl}/posts?search=${encodeURIComponent(query)}&per_page=10`, {
+                    timeout: 10_000,
+                    headers: this.requestConfig().headers,
+                }),
+                this.httpClient.get(`${restUrl}/series?search=${encodeURIComponent(query)}&per_page=10`, {
+                    timeout: 10_000,
+                    headers: this.requestConfig().headers,
+                }),
+            ])
+
+            for (const res of [postsRes, seriesRes]) {
+                if (res.status !== 'fulfilled' || !Array.isArray(res.value?.data)) {
+                    continue
+                }
+                for (const item of res.value.data) {
+                    const link = item.link ?? ''
+                    const path = this.pagePath(link)
+                    const id = this.pageId(path)
+                    const name = item.title?.rendered
+                        ? normalizeText(item.title.rendered).replace(/^(دانلود\s+(فیلم|سریال)\s+)/, '').trim()
+                        : ''
+                    if (!id || !name || !name.toLowerCase().includes(lcQuery)) {
+                        continue
+                    }
+                    const type = path?.startsWith('/series/') ? 'series' : 'movie'
+                    if (!isDetailPath(type, path)) {
+                        continue
+                    }
+                    const imgUrl = item.featured_media_url ?? item.jetpack_featured_media_url ?? null
+                    fallbackResults.push({id, name, poster: imgUrl, type, genres: []})
+                }
+            }
+
+            this.logger.debug('F2Media search completed', {
+                query,
+                resultCount: fallbackResults.length,
+                method: 'rest-api',
+            })
+            return fallbackResults
         } catch (error) {
             logAxiosError(error, this.logger, 'F2Media search failed')
             return []
@@ -209,7 +273,9 @@ export default class F2Media extends HtmlSource {
         try {
             this.logger.debug('F2Media detail started', {type, path})
             const $ = await this.fetchDocument(path)
-            const result = $ ? parseF2MediaDetail($, type, path) : null
+            const result = $
+                ? (type === 'series' ? parseF2MediaSeriesDetail($, path) : parseF2MediaMovieDetail($, path))
+                : null
             this.logger.debug('F2Media detail completed', {
                 type,
                 path,
@@ -236,7 +302,6 @@ export default class F2Media extends HtmlSource {
         }
         return this.getMovieLinks(movieData)
             .filter((item) => item.season === season && item.episode === episode)
-            .map(({url, title}) => ({url, title}))
     }
 
     getLinks(type, videoId, movieData) {
@@ -253,7 +318,10 @@ export default class F2Media extends HtmlSource {
         if (movieData?.imdbId) {
             return movieData.imdbId
         }
-        const title = normalizeText(movieData?.title).replace(/\s+(?:19|20)\d{2}$/, '')
+        const title = normalizeText(movieData?.title ?? '').replace(/\s+(?:19|20)\d{2}$/, '')
+        if (!title) {
+            return null
+        }
         const tmdbData = await searchAndGetTMDB(title, type, this.httpClient, this.logger, this.tmdbApiKey)
         return tmdbData?.external_ids?.imdb_id ?? null
     }

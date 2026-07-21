@@ -8,6 +8,12 @@ PEEPBOXTV_USER_ID=
 PEEPBOXTV_ANDROID_ID=
 PEEPBOXTV_API_KEY=
 
+CINAMATIC_BASEURL=
+
+ASLMOVIEZ_BASEURL=
+
+SERIALBLOG_BASEURL=
+
 # Set this to true to proxy metadata images through this same Worker.
 PROXY_ENABLE=false
 # Optional in Workers: defaults to the current Worker origin.

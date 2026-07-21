@@ -78,9 +78,10 @@ test('Cloudflare Worker exposes catalog, metadata, stream, and subtitle routes',
     assert.equal(metaBody.meta.behaviorHints.defaultVideoId, metaBody.meta.id)
 
     const stream = await handler(new Request('https://addon.example/stream/movie/ipf2media___10___10.json'), {})
-    assert.deepEqual(await stream.json(), {
-        streams: [{url: 'https://media.example/movie.mp4', title: '1080p'}],
-    })
+    const streamBody = await stream.json()
+    assert.equal(streamBody.streams.length, 1)
+    assert.equal(streamBody.streams[0].url, 'https://media.example/movie.mp4')
+    assert.ok(streamBody.streams[0].title.includes('1080p'))
 
     const subtitles = await handler(new Request(
         'https://addon.example/subtitles/movie/ipf2media___10___tt1234567.json',

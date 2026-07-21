@@ -1,16 +1,24 @@
+import Aslmoviez from '../sources/aslmoviez.js'
+import Cinamatic from '../sources/cinamatic.js'
 import F2Media from '../sources/f2media.js'
+import IPTV from '../sources/iptv.js'
 import Peepboxtv from '../sources/peepboxtv.js'
+import Serialblog from '../sources/serialblog.js'
 import {ID_SEPARATOR, METADATA_SOURCE} from '../sources/source.js'
 import {modifyUrls} from '../utils.js'
 import {createFetchHttpClient} from './http-client.js'
 import {createWorkerProxyConfig, handleProxyRequest} from './proxy.js'
 
 const ADDON_PREFIX = 'ip'
-const ADDON_VERSION = '2.4.0'
+const ADDON_VERSION = '2.5.0'
 
 const CATALOGS = [
-    {key: 'f2media', name: 'F2Media'},
-    {key: 'peepboxtv', name: 'PeepBoxTv'},
+    {key: 'f2media', name: 'F2Media', catalogType: 'movies'},
+    {key: 'peepboxtv', name: 'PeepBoxTv', catalogType: 'movies'},
+    {key: 'cinamatic', name: 'Cinamatic', catalogType: 'movies'},
+    {key: 'aslmoviez', name: 'AslMoviez', catalogType: 'movies'},
+    {key: 'serialblog', name: 'SerialBlog', catalogType: 'movies'},
+    {key: 'iptv', name: 'Seda va Sima - Telewebion', catalogType: 'tv', searchRequired: false},
 ]
 const CORS_HEADERS = {
     'access-control-allow-headers': 'Content-Type',
@@ -41,19 +49,25 @@ export function createWorkerManifest(env = {}) {
         description: 'Stream movies and series from Iranian providers. Source: https://github.com/MrMohebi/stremio-ir-providers',
         logo: 'https://raw.githubusercontent.com/MrMohebi/stremio-ir-providers/refs/heads/master/logo.png',
         name: `Iran Provider${developmentSuffix}`,
-        catalogs: CATALOGS.flatMap(({key, name}) => ['movie', 'series'].map((type) => ({
-            name: `${name}${developmentSuffix}`,
-            type,
-            id: `${key}_${type === 'movie' ? 'movies' : 'series'}`,
-            extra: [{name: 'search', isRequired: true}],
-        }))),
+        catalogs: CATALOGS.flatMap((cfg) => {
+            const isSearchable = cfg.searchRequired !== false
+            const types = cfg.catalogType === 'tv' ? ['tv'] : ['movie', 'series']
+            return types.map((type) => ({
+                name: cfg.catalogType === 'tv' ? cfg.name : `${cfg.name}${developmentSuffix}`,
+                type,
+                id: `${cfg.key}_${cfg.catalogType === 'tv' ? 'tv' : (type === 'movie' ? 'movies' : 'series')}`,
+                extra: isSearchable
+                    ? [{name: 'search', isRequired: true}]
+                    : [{name: 'skip', isRequired: false}, {name: 'search', isRequired: false}],
+            }))
+        }),
         resources: [
             'catalog',
-            {name: 'meta', types: ['series', 'movie'], idPrefixes: [ADDON_PREFIX]},
-            {name: 'stream', types: ['series', 'movie'], idPrefixes: [ADDON_PREFIX]},
+            {name: 'meta', types: ['series', 'movie', 'tv'], idPrefixes: [ADDON_PREFIX]},
+            {name: 'stream', types: ['series', 'movie', 'tv'], idPrefixes: [ADDON_PREFIX, 'tt']},
             {name: 'subtitles', types: ['series', 'movie'], idPrefixes: [ADDON_PREFIX]},
         ],
-        types: ['movie', 'series'],
+        types: ['movie', 'series', 'tv'],
     }
 }
 
@@ -61,6 +75,10 @@ export function createWorkerProviders({env = {}, logger = console, httpClient} =
     return [
         new F2Media(env.F2MEDIA_BASEURL, logger, httpClient, env),
         new Peepboxtv(env.PEEPBOXTV_BASEURL, logger, httpClient, env),
+        new Cinamatic(env.CINAMATIC_BASEURL, logger, httpClient, env),
+        new Aslmoviez(env.ASLMOVIEZ_BASEURL, logger, httpClient, env),
+        new Serialblog(env.SERIALBLOG_BASEURL, logger, httpClient, env),
+        new IPTV(null, logger, httpClient, env),
     ]
 }
 
@@ -105,13 +123,52 @@ function decoded(value) {
 }
 
 function findCatalogProvider(catalogId, providers) {
-    return providers.find((provider) => catalogId === `${provider.key}_movies` || catalogId === `${provider.key}_series`)
+    return providers.find((provider) => {
+        const cfg = CATALOGS.find((c) => c.key === provider.key)
+        if (cfg?.catalogType === 'tv') {
+            return catalogId === `${provider.key}_tv`
+        }
+        return catalogId === `${provider.key}_movies` || catalogId === `${provider.key}_series`
+    })
 }
 
 function proxyPrefix(env, requestUrl) {
     const baseUrl = String(env.PROXY_URL || new URL(requestUrl).origin).replace(/\/$/, '')
     const path = createWorkerProxyConfig(env).path
     return `${baseUrl}/${path}?url=`
+}
+
+const QUALITY_RANKS = {
+    '2160': 7, '4k': 7,
+    '1440': 6,
+    '1080': 5,
+    '720': 4,
+    '576': 3,
+    '480': 2,
+    '360': 1,
+    '240': 0,
+}
+
+function rankFromTitle(title) {
+    const t = String(title ?? '').toLowerCase()
+    for (const [key, rank] of Object.entries(QUALITY_RANKS)) {
+        if (t.includes(key)) {
+            return rank
+        }
+    }
+    return -1
+}
+
+function sortByQuality(streams) {
+    if (!Array.isArray(streams)) {
+        return streams
+    }
+    return streams
+        .map((s) => ({
+            ...s,
+            title: (s.title ?? '').replace(/انکودر\s*:/gi, '').replace(/encoder\s*:/gi, '').trim(),
+        }))
+        .sort((a, b) => rankFromTitle(b.title) - rankFromTitle(a.title))
 }
 
 function logResourceError(logger, resource, error) {
@@ -151,13 +208,34 @@ async function getSubtitle(type, imdbId, httpClient) {
 async function catalogResponse(route, providers, logger) {
     try {
         const provider = findCatalogProvider(route.id, providers)
-        const search = new URLSearchParams(route.extraArgs ?? '').get('search')?.trim()
-        if (!provider || !search || !['movie', 'series'].includes(route.type)) {
+        if (!provider) {
             return json({metas: []})
         }
-        const results = await provider.search(search)
+
+        const cfg = CATALOGS.find((c) => c.key === provider.key)
+        const isSearchable = cfg ? cfg.searchRequired !== false : true
+        const extraQuery = new URLSearchParams(route.extraArgs ?? '')
+        const search = extraQuery.get('search')?.trim()
+
+        if (isSearchable) {
+            if (!search || !['movie', 'series'].includes(route.type)) {
+                return json({metas: []})
+            }
+            const results = await provider.search(search)
+            const metas = (Array.isArray(results) ? results : [])
+                .filter((item) => item?.id != null && item.type === route.type)
+                .map((item) => ({...item, id: `${ADDON_PREFIX}${provider.providerID}${item.id}`}))
+            return json({metas})
+        }
+
+        if (route.type !== 'tv') {
+            return json({metas: []})
+        }
+
+        const extraArgs = Object.fromEntries(extraQuery)
+        const results = await provider.getCatalog(route.type, extraArgs)
         const metas = (Array.isArray(results) ? results : [])
-            .filter((item) => item?.id != null && item.type === route.type)
+            .filter((item) => item?.id != null)
             .map((item) => ({...item, id: `${ADDON_PREFIX}${provider.providerID}${item.id}`}))
         return json({metas})
     } catch (error) {
@@ -169,7 +247,7 @@ async function catalogResponse(route, providers, logger) {
 async function metaResponse(route, providers, services, env, requestUrl, logger) {
     try {
         const parsedId = parseWorkerAddonId(route.id, providers)
-        if (!parsedId || !['movie', 'series'].includes(route.type)) {
+        if (!parsedId || !['movie', 'series', 'tv'].includes(route.type)) {
             return json({})
         }
         const movieData = await parsedId.provider.getMovieData(route.type, parsedId.providerItemId)
@@ -211,17 +289,102 @@ async function metaResponse(route, providers, services, env, requestUrl, logger)
     }
 }
 
-async function streamResponse(route, providers, logger) {
+function parseImdbId(value) {
+    const parts = String(value ?? '').split(':')
+    const imdbId = parts[0]
+    if (!/^tt\d+$/.test(imdbId)) {
+        return null
+    }
+    return {
+        imdbId,
+        season: parts[1] ? Number(parts[1]) : null,
+        episode: parts[2] ? Number(parts[2]) : null,
+    }
+}
+
+async function getCinemetaName(type, imdbId, services) {
+    const cinemeta = await services.getCinemeta(type, imdbId)
+    return cinemeta?.meta?.name ?? null
+}
+
+async function imdbStreamResponse(type, id, providers, services, logger) {
+    const parsed = parseImdbId(id)
+    if (!parsed) {
+        return json({streams: []})
+    }
+
+    const title = await getCinemetaName(type, parsed.imdbId, services)
+    if (!title) {
+        return json({streams: []})
+    }
+
+    const cleanTitle = title.replace(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g, '').trim().toLowerCase()
+
+    const settled = await Promise.allSettled(
+        providers.map(async (provider) => {
+            const results = await provider.search(cleanTitle)
+            const match = results.find((r) => {
+                const cleanName = r.name.replace(/[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/g, '').toLowerCase()
+                return cleanName.includes(cleanTitle) || cleanTitle.includes(cleanName)
+            })
+            if (!match) {
+                return {key: provider.key, streams: []}
+            }
+
+            const movieData = await provider.getMovieData(match.type, match.id)
+            if (!movieData) {
+                return {key: provider.key, streams: []}
+            }
+
+            const videoId = parsed.season && parsed.episode
+                ? `${parsed.imdbId}:${parsed.season}:${parsed.episode}`
+                : null
+            const links = provider.getLinks(match.type, videoId, movieData)
+
+            const streamName = match.name || title
+            return {
+                key: provider.key,
+                streams: (Array.isArray(links) ? links : []).map((link) => ({
+                    url: link.url,
+                    title: `${provider.key} - ${streamName} - ${link.title}`,
+                })),
+            }
+        }),
+    )
+
+    const allStreams = settled
+        .filter((r) => r.status === 'fulfilled')
+        .flatMap((r) => r.value.streams)
+
+    return json({streams: sortByQuality(allStreams)})
+}
+
+async function streamResponse(route, providers, services, logger) {
     try {
-        const parsedId = parseWorkerAddonId(route.id, providers)
-        if (!parsedId || !['movie', 'series'].includes(route.type)) {
+        if (!['movie', 'series', 'tv'].includes(route.type)) {
             return json({streams: []})
         }
-        const movieData = await parsedId.provider.getMovieData(route.type, parsedId.providerItemId)
-        const streams = movieData
-            ? parsedId.provider.getLinks(route.type, parsedId.videoId, movieData)
-            : []
-        return json({streams: Array.isArray(streams) ? streams : []})
+
+        const parsedId = parseWorkerAddonId(route.id, providers)
+        if (parsedId) {
+            const movieData = await parsedId.provider.getMovieData(route.type, parsedId.providerItemId)
+            let streams = movieData
+                ? parsedId.provider.getLinks(route.type, parsedId.videoId, movieData)
+                : []
+            if (Array.isArray(streams) && movieData?.title) {
+                streams = streams.map((link) => ({
+                    ...link,
+                    title: `${parsedId.provider.key} - ${movieData.title} - ${link.title}`,
+                }))
+            }
+            return json({streams: sortByQuality(Array.isArray(streams) ? streams : [])})
+        }
+
+        if (!/^tt/.test(route.id)) {
+            return json({streams: []})
+        }
+
+        return await imdbStreamResponse(route.type, route.id, providers, services, logger)
     } catch (error) {
         logResourceError(logger, 'Stream', error)
         return json({streams: []})
@@ -295,7 +458,7 @@ export function createWorkerHandler(options = {}) {
                     } else if (route.resource === 'meta') {
                         response = await metaResponse(route, providers, services, env, request.url, logger)
                     } else if (route.resource === 'stream') {
-                        response = await streamResponse(route, providers, logger)
+                        response = await streamResponse(route, providers, services, logger)
                     } else {
                         response = await subtitleResponse(route, providers, services, logger)
                     }
